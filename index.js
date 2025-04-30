@@ -66,28 +66,33 @@ async function loadCitations() {
   }
 }
 
-// Commande pour jouer un son : !play nom_du_son
 client.on('messageCreate', async (message) => {
   if (message.content === '!sounds') {
     const soundsDir = path.join(__dirname, 'sounds');
+
     if (!fs.existsSync(soundsDir)) {
       return message.reply('Le dossier des sons n\'existe pas.');
     }
 
-    const files = fs.readdirSync(soundsDir).filter(file => file.endsWith('.mp3')).slice(0, 25);
+    // Filtrer uniquement les fichiers .ogg
+    const files = fs.readdirSync(soundsDir).filter(file => file.endsWith('.ogg'));
+
     if (files.length === 0) {
-      return message.reply('Aucun son disponible.');
+      return message.reply('Aucun son .ogg disponible.');
     }
 
-    const options = files.map(file => ({
-      label: file.replace('.mp3', ''),
-      value: file.replace('.mp3', '')
-    }));
+    // Création du menu (maximum 25 sons)
+    const options = files
+      .map(file => ({
+        label: file.replace('.ogg', ''),
+        value: file.replace('.ogg', '')
+      }))
+      .slice(0, 25); // Discord ne permet que 25 options
 
     const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId('select-sound')
-    .setPlaceholder('Choisis un son à jouer')
-    .addOptions(options);
+      .setCustomId('select-sound')
+      .setPlaceholder('Choisis un son à jouer')
+      .addOptions(options);
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
 
@@ -96,55 +101,12 @@ client.on('messageCreate', async (message) => {
       components: [row]
     });
   }
-
-  if (!message.content.startsWith('!play') || message.author.bot) return;
-
-  const args = message.content.split(' ');
-  const soundName = args[1];
-  if (!soundName) {
-    return message.reply('Utilisation : `!play <nom_du_son>`');
-  }
-
-  const soundPath = path.join(__dirname, 'sounds', `${soundName}.mp3`);
-  if (!fs.existsSync(soundPath)) {
-    return message.reply(`Son "${soundName}" introuvable.`);
-  }
-
-  const voiceChannel = message.member.voice.channel;
-  if (!voiceChannel) {
-    return message.reply('Tu dois être dans un salon vocal.');
-  }
-
-  const connection = joinVoiceChannel({
-    channelId: voiceChannel.id,
-    guildId: message.guild.id,
-    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-  });
-
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-    const resource = createAudioResource(soundPath);
-    const player = createAudioPlayer();
-
-    connection.subscribe(player);
-    player.play(resource);
-
-    player.on(AudioPlayerStatus.Idle, () => {
-      connection.destroy();
-    });
-  } catch (error) {
-    console.error(error);
-    message.reply('Erreur lors de la lecture du son.');
-    connection.destroy();
-  }
 });
 
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isStringSelectMenu()) return;
-  if (interaction.customId !== 'select-sound') return;
 
+if (interaction.customId === 'select-sound') {
   const soundName = interaction.values[0];
-  const soundPath = path.join(__dirname, 'sounds', `${soundName}.mp3`);
+  const soundPath = path.join(__dirname, 'sounds', `${soundName}.ogg`);
 
   const member = interaction.guild.members.cache.get(interaction.user.id);
   const voiceChannel = member?.voice.channel;
@@ -173,13 +135,15 @@ client.on('interactionCreate', async interaction => {
     player.on(AudioPlayerStatus.Idle, () => {
       connection.destroy();
     });
+
     await interaction.reply({ content: `▶️ Lecture de **${soundName}**`, ephemeral: false });
   } catch (error) {
     console.error(error);
     interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
     connection.destroy();
   }
-});
+}
+
 
 // Fonction pour récupérer tous les membres ayant le rôle "Zen" (en ligne ou non)
 async function getAllZenMembers(message) {
