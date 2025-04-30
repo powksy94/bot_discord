@@ -127,11 +127,11 @@ if (interaction.customId === 'select-sound') {
   const voiceChannel = member?.voice.channel;
 
   if (!voiceChannel) {
-    return interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
+    await interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
   }
 
   if (!fs.existsSync(soundPath)) {
-    return interaction.reply({ content: 'Son introuvable.', ephemeral: true });
+    await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
   }
 
   const connection = joinVoiceChannel({
