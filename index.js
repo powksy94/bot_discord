@@ -66,28 +66,43 @@ async function loadCitations() {
   }
 }
 
+let soundFiles = []; // Variable globale pour stocker la liste des fichiers sons
+
+// Fonction pour recharger la liste des sons
+async function reloadSounds() {
+  const soundsDir = path.join(__dirname, 'sounds');
+
+  if (!fs.existsSync(soundsDir)) {
+    return 'Le dossier des sons n\'existe pas.';
+  }
+
+  const files = fs.readdirSync(soundsDir).filter(file => file.endsWith('.ogg'));
+  if (files.length === 0) {
+    return 'Aucun son .ogg disponible.';
+  }
+
+  // Mise à jour de la variable globale
+  soundFiles = files.map(file => ({
+    label: file.replace('.ogg', ''),
+    value: file.replace('.ogg', '')
+  }));
+
+  return `${files.length} son(s) rechargé(s).`;
+}
+
+// Commande pour recharger la liste des sons
 client.on('messageCreate', async (message) => {
+  if (message.content === '!reload_sounds') {
+    const result = await reloadSounds();
+    message.reply(result);  // Retourne une réponse indiquant si les sons ont été rechargés
+  }
+
   if (message.content === '!sounds') {
-    const soundsDir = path.join(__dirname, 'sounds');
-
-    if (!fs.existsSync(soundsDir)) {
-      return message.reply('Le dossier des sons n\'existe pas.');
+    if (soundFiles.length === 0) {
+      return message.reply('Aucun son disponible.');
     }
 
-    // Filtrer uniquement les fichiers .ogg
-    const files = fs.readdirSync(soundsDir).filter(file => file.endsWith('.ogg'));
-
-    if (files.length === 0) {
-      return message.reply('Aucun son .ogg disponible.');
-    }
-
-    // Création du menu (maximum 25 sons)
-    const options = files
-      .map(file => ({
-        label: file.replace('.ogg', ''),
-        value: file.replace('.ogg', '')
-      }))
-      .slice(0, 25); // Discord ne permet que 25 options
+    const options = soundFiles.slice(0, 25); // Limite à 25 sons
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('select-sound')
