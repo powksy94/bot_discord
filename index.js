@@ -4,6 +4,11 @@ dotenv.config(); // Charge le fichier .env
 
 const token = process.env.DISCORD_TOKEN;
 
+if (!token) {
+  console.error("❌ Le token Discord (DISCORD_TOKEN) est manquant. Vérifie ton .env ou les variables Railway.");
+  process.exit(1); // stoppe l'application
+}
+
 
 const client = new Client({
   intents: [
