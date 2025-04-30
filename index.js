@@ -1,7 +1,14 @@
 import dotenv from 'dotenv';
 import { Client, GatewayIntentBits, ChannelType, ActionRowBuilder, StringSelectMenuBuilder, Events } from 'discord.js';
+import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, entersState, VoiceConnectionStatus } from '@discordjs/voice';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
 dotenv.config(); // Charge le fichier .env
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const token = process.env.DISCORD_TOKEN;
 
 if (!token) {
@@ -16,6 +23,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers, // Nécessaire pour accéder aux membres
+    GatewayIntentBits.GuildVoiceStates, // Ajout pour le vocal
   ],
 });
 
@@ -58,6 +66,121 @@ async function loadCitations() {
   }
 }
 
+// Commande pour jouer un son : !play nom_du_son
+client.on('messageCreate', async (message) => {
+  if (message.content === '!sounds') {
+    const soundsDir = path.join(__dirname, 'sounds');
+    if (!fs.existsSync(soundsDir)) {
+      return message.reply('Le dossier des sons n\'existe pas.');
+    }
+
+    const files = fs.readdirSync(soundsDir).filter(file => file.endsWith('.mp3')).slice(0, 25);
+    if (files.length === 0) {
+      return message.reply('Aucun son disponible.');
+    }
+
+    const options = files.map(file => ({
+      label: file.replace('.mp3', ''),
+      value: file.replace('.mp3', '')
+    }));
+
+    const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('select-sound')
+    .setPlaceholder('Choisis un son à jouer')
+    .addOptions(options);
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+
+    await message.reply({
+      content: '🎵 Sélectionne un son à jouer :',
+      components: [row]
+    });
+  }
+
+  if (!message.content.startsWith('!play') || message.author.bot) return;
+
+  const args = message.content.split(' ');
+  const soundName = args[1];
+  if (!soundName) {
+    return message.reply('Utilisation : `!play <nom_du_son>`');
+  }
+
+  const soundPath = path.join(__dirname, 'sounds', `${soundName}.mp3`);
+  if (!fs.existsSync(soundPath)) {
+    return message.reply(`Son "${soundName}" introuvable.`);
+  }
+
+  const voiceChannel = message.member.voice.channel;
+  if (!voiceChannel) {
+    return message.reply('Tu dois être dans un salon vocal.');
+  }
+
+  const connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: message.guild.id,
+    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+  });
+
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    const resource = createAudioResource(soundPath);
+    const player = createAudioPlayer();
+
+    connection.subscribe(player);
+    player.play(resource);
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      connection.destroy();
+    });
+  } catch (error) {
+    console.error(error);
+    message.reply('Erreur lors de la lecture du son.');
+    connection.destroy();
+  }
+});
+
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== 'select-sound') return;
+
+  const soundName = interaction.values[0];
+  const soundPath = path.join(__dirname, 'sounds', `${soundName}.mp3`);
+
+  const member = interaction.guild.members.cache.get(interaction.user.id);
+  const voiceChannel = member?.voice.channel;
+
+  if (!voiceChannel) {
+    return interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
+  }
+
+  if (!fs.existsSync(soundPath)) {
+    return interaction.reply({ content: 'Son introuvable.', ephemeral: true });
+  }
+
+  const connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: voiceChannel.guild.id,
+    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+  });
+
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    const resource = createAudioResource(soundPath);
+    const player = createAudioPlayer();
+    connection.subscribe(player);
+    player.play(resource);
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      connection.destroy();
+    });
+    await interaction.reply({ content: `▶️ Lecture de **${soundName}**`, ephemeral: false });
+  } catch (error) {
+    console.error(error);
+    interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
+    connection.destroy();
+  }
+});
+
 // Fonction pour récupérer tous les membres ayant le rôle "Zen" (en ligne ou non)
 async function getAllZenMembers(message) {
   try {
@@ -99,37 +222,37 @@ async function handleCommands(message) {
     case '!zen':
       await message.channel.send('Voici les membres Zen...');
       break;
-      case '!meteo': {
-        const zenMembers = await getAllZenMembers(message);
-      
-        // Vérifie qu'il y a des membres à proposer
-        if (zenMembers.size === 0) {
-          message.channel.send("Aucun membre avec le rôle Zen trouvé.");
-          return;
-        }
-      
-        const options = Array.from(zenMembers.values()).map(member => ({
-          label: member.user.username,
-          value: member.id,
-          description: `Utilisateur : ${member.user.tag}`,
-          emoji: '🧘‍♂️',
-        })).slice(0, 25); // Discord limite à 25 options
-      
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId('select_pseudo')
-          .setPlaceholder('Choisissez un membre Zen')
-          .addOptions(options);
-      
-        const row = new ActionRowBuilder().addComponents(selectMenu);
-      
-        message.channel.send({
-          content: 'Veuillez sélectionner un membre Zen :',
-          components: [row],
-        });
-      
-        break;
+    case '!meteo': {
+      const zenMembers = await getAllZenMembers(message);
+
+      // Vérifie qu'il y a des membres à proposer
+      if (zenMembers.size === 0) {
+        message.channel.send("Aucun membre avec le rôle Zen trouvé.");
+        return;
       }
-      
+
+      const options = Array.from(zenMembers.values()).map(member => ({
+        label: member.user.username,
+        value: member.id,
+        description: `Utilisateur : ${member.user.tag}`,
+        emoji: '🧘‍♂️',
+      })).slice(0, 25); // Discord limite à 25 options
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('select_pseudo')
+        .setPlaceholder('Choisissez un membre Zen')
+        .addOptions(options);
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+
+      message.channel.send({
+        content: 'Veuillez sélectionner un membre Zen :',
+        components: [row],
+      });
+
+      break;
+    }
+
     case '!citation':
       const options = citations.map((citation, index) => ({
         label: `Citation de ${citation.auteur}`,
