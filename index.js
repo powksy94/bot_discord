@@ -119,46 +119,50 @@ client.on('messageCreate', async (message) => {
 });
 
 
-if (interaction.customId === 'select-sound') {
-  const soundName = interaction.values[0];
-  const soundPath = path.join(__dirname, 'sounds', `${soundName}.ogg`);
+// Gérer les interactions pour jouer des sons ou des citations
+client.on(Events.InteractionCreate, async (interaction) => {
+ 
 
-  const member = interaction.guild.members.cache.get(interaction.user.id);
-  const voiceChannel = member?.voice.channel;
+  if (interaction.customId === 'select-sound') {
+    const soundName = interaction.values[0];
+    const soundPath = path.join(__dirname, 'sounds', `${soundName}.ogg`);
 
-  if (!voiceChannel) {
-    await interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
-  }
+    const member = interaction.guild.members.cache.get(interaction.user.id);
+    const voiceChannel = member?.voice.channel;
 
-  if (!fs.existsSync(soundPath)) {
-    await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
-  }
+    if (!voiceChannel) {
+      await interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
+    }
 
-  const connection = joinVoiceChannel({
-    channelId: voiceChannel.id,
-    guildId: voiceChannel.guild.id,
-    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-  });
+    if (!fs.existsSync(soundPath)) {
+      await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
+    }
 
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-    const resource = createAudioResource(soundPath);
-    const player = createAudioPlayer();
-    connection.subscribe(player);
-    player.play(resource);
-
-    player.on(AudioPlayerStatus.Idle, () => {
-      connection.destroy();
+    const connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: voiceChannel.guild.id,
+      adapterCreator: voiceChannel.guild.voiceAdapterCreator,
     });
 
-    await interaction.reply({ content: `▶️ Lecture de **${soundName}**`, ephemeral: false });
-  } catch (error) {
-    console.error(error);
-    interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
-    connection.destroy();
-  }
-}
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+      const resource = createAudioResource(soundPath);
+      const player = createAudioPlayer();
+      connection.subscribe(player);
+      player.play(resource);
 
+      player.on(AudioPlayerStatus.Idle, () => {
+        connection.destroy();
+      });
+
+      await interaction.reply({ content: `▶️ Lecture de **${soundName}**`, ephemeral: false });
+    } catch (error) {
+      console.error(error);
+      interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
+      connection.destroy();
+    }
+  }
+})
 
 // Fonction pour récupérer tous les membres ayant le rôle "Zen" (en ligne ou non)
 async function getAllZenMembers(message) {
