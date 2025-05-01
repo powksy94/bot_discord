@@ -121,7 +121,7 @@ client.on('messageCreate', async (message) => {
 
 // Gérer les interactions pour jouer des sons ou des citations
 client.on(Events.InteractionCreate, async (interaction) => {
- 
+
 
   if (interaction.customId === 'select-sound') {
     const soundName = interaction.values[0];
@@ -136,6 +136,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!fs.existsSync(soundPath)) {
       await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
+    }
+
+    // Exemple d'ajout de volume via commande
+    if (interaction.customId === 'select-volume') {
+      const volume = interaction.values[0]; // Par exemple, 0.5, 1, 2
+      // Applique le volume sélectionné à la lecture du son
+      playSound(interaction, soundName, volume); // Fonction playSound modifiée pour accepter le volume
     }
 
     const connection = joinVoiceChannel({
