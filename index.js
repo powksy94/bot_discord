@@ -199,6 +199,27 @@ async function getAllZenMembers(message) {
 async function handleCommands(message) {
   if (message.author.bot) return;
 
+  
+  const content = message.content.toLowerCase();
+
+  if (content === '!') {
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('command_menu')
+      .setPlaceholder('Choisissez une commande')
+      .addOptions([
+        { label: 'Bonjour', value: 'bonjour', description: 'Dire bonjour' },
+        { label: 'Aide', value: 'aide', description: 'Voir les commandes disponibles' },
+        { label: 'Citation', value: 'citation', description: 'Obtenir une citation' },
+        { label: 'Météo', value: 'meteo', description: 'Le fameux Meteo' },
+        { label: 'Zen', value: 'zen', description: 'Voir les membres Zen' },
+        { label: 'Messi', value: 'messi', description: 'Un message légendaire' },
+      ]);
+
+    const row = new ActionRowBuilder().addComponents(menu);
+    await message.channel.send({ content: 'Voici les commandes disponibles :', components: [row] });
+    return;
+  }
+
   switch (message.content.toLowerCase()) {
     case '!bonjour':
       await message.channel.send('Bonjour ! Je suis ton bot.');
