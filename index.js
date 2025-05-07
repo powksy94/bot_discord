@@ -213,6 +213,7 @@ async function handleCommands(message) {
         { label: 'Météo', value: 'meteo', description: 'Le fameux Meteo' },
         { label: 'Zen', value: 'zen', description: 'Voir les membres Zen' },
         { label: 'Messi', value: 'messi', description: 'Un message légendaire' },
+        { label: 'sounds', value: 'sounds', description: 'de magnifiques sons' },
       ]);
 
     const row = new ActionRowBuilder().addComponents(menu);
@@ -232,6 +233,9 @@ async function handleCommands(message) {
       break;
     case '!zen':
       await message.channel.send('Voici les membres Zen...');
+      break; 
+    case '!sounds':
+      await interaction.reply('Voici la commande `!sounds` pour jouer un son ou une musique.');
       break;
     case '!meteo': {
       const zenMembers = await getAllZenMembers(message);
