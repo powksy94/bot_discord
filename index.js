@@ -258,7 +258,7 @@ async function handleInteraction(interaction) {
         await interaction.reply('Voici les membres Zen...');
         break;
       case 'sounds':
-        await handleSoundsCommand(interaction);
+        await handleSoundsCommand();
         break;
       case 'meteo': {
         const zenMembers = await getAllZenMembers(interaction);
