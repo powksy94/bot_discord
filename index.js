@@ -121,34 +121,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
       return;
     }
-
-    // Exemple d'ajout de volume via commande
-    if (interaction.customId === 'select-volume') {
-      const volume = interaction.values[0]; // Par exemple, 0.5, 1, 2
-      if (isNaN(volume)) {
-        await interaction.reply({ content: 'Volume invalide.', ephemeral: true });
-        return;
-      }
-      // Applique le volume sélectionné à la lecture du son
-      playSound(interaction, soundName, volume); // Fonction playSound modifiée pour accepter le volume
-    }
-
-    const connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: voiceChannel.guild.id,
-      adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-    });
-
+    
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-      const resource = createAudioResource(soundPath);
-      const player = createAudioPlayer();
-      // On rejoint le salon vocal de l'utilisateur
       const connection = joinVoiceChannel({
         channelId: interaction.member.voice.channel.id,
         guildId: interaction.guild.id,
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+      const resource = createAudioResource(soundPath);
+      const player = createAudioPlayer();
+      // On rejoint le salon vocal de l'utilisateur
+     
       connection.subscribe(player);
       player.play(resource);
 
@@ -162,6 +146,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
       connection.destroy();
     }
+
+    // Exemple d'ajout de volume via commande
+    if (interaction.customId === 'select-volume') {
+      const volume = interaction.values[0]; // Par exemple, 0.5, 1, 2
+      if (isNaN(volume)) {
+        await interaction.reply({ content: 'Volume invalide.', ephemeral: true });
+        return;
+      }
+      // Applique le volume sélectionné à la lecture du son
+      playSound(interaction, soundName, volume); // Fonction playSound modifiée pour accepter le volume
+    }
+
+   
   }
 })
 
