@@ -324,7 +324,7 @@ async function handleInteraction(interaction) {
       content: `${citation.auteur} a dit : "${citation.citation}"`,
     });
   }
-})
+}
 
 // Fonction d'initialisation
 client.once('ready', async () => {
