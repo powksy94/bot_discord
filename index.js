@@ -221,7 +221,7 @@ async function handleCommands(message) {
       await message.channel.send({ content: 'Voici les commandes disponibles :', components: [row] });
       return;
     }}
-  if (interaction.isStringSelectMenu() && interaction.customId === 'command_menu') {
+  if (interaction.isStringSelectMenu() || interaction.customId === 'command_menu') {
     const selected = interaction.values[0];
   
     switch (selected) {
