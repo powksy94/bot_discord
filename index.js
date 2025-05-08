@@ -69,7 +69,7 @@ async function loadCitations() {
 let soundFiles = []; // Variable globale pour stocker la liste des fichiers sons
 
 // Fonction pour recharger la liste des sons
-async function handleSoundsCommand(interaction) {
+async function handleSoundsCommand() {
   const soundsDir = path.join(__dirname, 'sounds');
 
   if (!fs.existsSync(soundsDir)) {
@@ -132,10 +132,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!voiceChannel) {
       await interaction.reply({ content: 'Tu dois être dans un salon vocal.', ephemeral: true });
+      return;
     }
 
     if (!fs.existsSync(soundPath)) {
       await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
+      return;
     }
 
     // Exemple d'ajout de volume via commande
