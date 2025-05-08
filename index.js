@@ -234,7 +234,7 @@ async function handleCommands(message) {
 }
 
 // Fonction pour gérer les interactions
-client.on(Events.InteractionCreate, async (interaction) => {
+async function handleInteraction(interaction) {
   if (!interaction.isStringSelectMenu()) return;
 
   const selected = interaction.values[0];
