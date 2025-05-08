@@ -98,26 +98,6 @@ client.on('messageCreate', async (message) => {
     const result = await handleSoundsCommand();
     message.reply(result);  // Retourne une réponse indiquant si les sons ont été rechargés
   }
-
-  if (message.content === '!sounds') {
-    if (soundFiles.length === 0) {
-      return message.reply('Aucun son disponible.');
-    }
-
-    const options = soundFiles.slice(0, 25); // Limite à 25 sons
-
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select-sound')
-      .setPlaceholder('Choisis un son à jouer')
-      .addOptions(options);
-
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-
-    await message.reply({
-      content: '🎵 Sélectionne un son à jouer :',
-      components: [row]
-    });
-  }
 });
 
 
@@ -257,9 +237,28 @@ async function handleInteraction(interaction) {
       case 'zen':
         await interaction.reply('Voici les membres Zen...');
         break;
-      case 'sounds':
+      case 'sounds': {
         await handleSoundsCommand();
+       
+        if (soundFiles.length === 0) {
+          return message.reply('Aucun son disponible.');
+        }
+    
+        const options = soundFiles.slice(0, 25); // Limite à 25 sons
+    
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId('select-sound')
+          .setPlaceholder('Choisis un son à jouer')
+          .addOptions(options);
+    
+        const row = new ActionRowBuilder().addComponents(selectMenu);
+    
+        await message.reply({
+          content: '🎵 Sélectionne un son à jouer :',
+          components: [row]
+        });
         break;
+      }
       case 'meteo': {
         const zenMembers = await getAllZenMembers(interaction);
 
