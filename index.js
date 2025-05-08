@@ -238,6 +238,7 @@ async function handleInteraction(interaction) {
         await interaction.reply('Voici les membres Zen...');
         break;
       case 'sounds': {
+        await interaction.deferReply();
         await handleSoundsCommand();
        
         if (soundFiles.length === 0) {
@@ -253,7 +254,7 @@ async function handleInteraction(interaction) {
     
         const row = new ActionRowBuilder().addComponents(selectMenu);
     
-        await message.reply({
+        await interaction.editReply({
           content: '🎵 Sélectionne un son à jouer :',
           components: [row]
         });
