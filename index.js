@@ -226,22 +226,22 @@ async function handleCommands(message) {
   
     switch (selected) {
 
-    case '!bonjour':
+    case 'bonjour':
       await message.channel.send('Bonjour ! Je suis ton bot.');
       break;
-    case '!aide':
+    case 'aide':
       await message.channel.send('Voici les commandes disponibles : `!bonjour`, `!aide`, `!citation [auteur]`, `!Meteo`, `!Zen`');
       break;
-    case '!messi':
+    case 'messi':
       await message.channel.send('Shreuuu est LE Messi, Notre Messi');
       break;
-    case '!zen':
+    case 'zen':
       await message.channel.send('Voici les membres Zen...');
       break;
-    case '!sounds':
+    case 'sounds':
       await interaction.reply('Voici la commande `!sounds` pour jouer un son ou une musique.');
       break;
-    case '!meteo': {
+    case 'meteo': {
       const zenMembers = await getAllZenMembers(message);
 
       // Vérifie qu'il y a des membres à proposer
@@ -272,7 +272,7 @@ async function handleCommands(message) {
       break;
     }
 
-    case '!citation':
+    case 'citation':
       const options = citations.map((citation, index) => ({
         label: `Citation de ${citation.auteur}`,
         description: citation.citation.slice(0, 50) + '...',
