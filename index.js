@@ -68,6 +68,8 @@ async function loadCitations() {
 
 let soundFiles = []; // Variable globale pour stocker la liste des fichiers sons
 
+
+
 // Fonction pour recharger la liste des sons
 async function handleSoundsCommand() {
   const soundsDir = path.join(__dirname, 'sounds');
@@ -332,6 +334,7 @@ async function handleInteraction(interaction) {
 client.once('ready', async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   await loadCitations();
+  await handleSoundsCommand();
 });
 
 
