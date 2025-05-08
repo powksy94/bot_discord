@@ -69,8 +69,8 @@ async function loadCitations() {
 let soundFiles = []; // Variable globale pour stocker la liste des fichiers sons
 
 // Fonction pour recharger la liste des sons
-async function handleSoundsCommand() {
-   const soundsDir = path.join(__dirname, 'sounds');
+async function handleSoundsCommand(interaction) {
+  const soundsDir = path.join(__dirname, 'sounds');
 
   if (!fs.existsSync(soundsDir)) {
     return 'Le dossier des sons n\'existe pas.';
@@ -234,7 +234,7 @@ async function handleCommands(message) {
 }
 
 // Fonction pour gérer les interactions
-async function handleInteraction(interaction) {
+client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
 
   const selected = interaction.values[0];
@@ -324,7 +324,7 @@ async function handleInteraction(interaction) {
       content: `${citation.auteur} a dit : "${citation.citation}"`,
     });
   }
-}
+})
 
 // Fonction d'initialisation
 client.once('ready', async () => {
