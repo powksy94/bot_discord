@@ -121,7 +121,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ content: 'Son introuvable.', ephemeral: true });
       return;
     }
-    
+
     try {
       const connection = joinVoiceChannel({
         channelId: interaction.member.voice.channel.id,
@@ -132,7 +132,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const resource = createAudioResource(soundPath);
       const player = createAudioPlayer();
       // On rejoint le salon vocal de l'utilisateur
-     
+
       connection.subscribe(player);
       player.play(resource);
 
@@ -158,7 +158,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       playSound(interaction, soundName, volume); // Fonction playSound modifiée pour accepter le volume
     }
 
-   
+
   }
 })
 
@@ -237,20 +237,20 @@ async function handleInteraction(interaction) {
       case 'sounds': {
         await interaction.deferReply();
         await handleSoundsCommand();
-       
+
         if (soundFiles.length === 0) {
           return message.reply('Aucun son disponible.');
         }
-    
+
         const options = soundFiles.slice(0, 25); // Limite à 25 sons
-    
+
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId('select-sound')
           .setPlaceholder('Choisis un son à jouer')
           .addOptions(options);
-    
+
         const row = new ActionRowBuilder().addComponents(selectMenu);
-    
+
         await interaction.editReply({
           content: '🎵 Sélectionne un son à jouer :',
           components: [row]
@@ -332,14 +332,90 @@ client.once('ready', async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   await loadCitations();
   await handleSoundsCommand();
-});
+})
+
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+setTimeout(async () => {
+  try {
+    const channel = await client.channels.fetch('1331717378181959743');
+    if (!channel || !channel.isTextBased()) {
+      console.error('Le salon spécifié est introuvable ou invalide.');
+      return;
+    }
+
+    const now = new Date();
+    const url = 'https://www.todayindestiny.com/';
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
+    const element = $('.eventCardHeaderSet');
+
+    // Fonction d'envoi selon le donjon détecté
+    const sendDungeonMessage = async (type) => {
+      if (type === 'prophecy') {
+        await channel.send('♾️ Le donjon prophétie est maintenant disponible en mode contest \nVenez tenter votre lumière aux confins du royaume des Neufs');
+        await channel.send({
+          content: "Voici l'image de la prophétie :",
+          files: ['./images/Prophecy_destiny.jpg']
+        });
+      } else if (type === 'ghost_of_the_deep') {
+        await channel.send('🥽 Le donjon fantômes des profondeurs est maintenant disponible en mode contest. \nVenez vous aventurer dans les profondeurs de titan afin de déceler ses mystères');
+        await channel.send({
+          content: "Voici une autre image :",
+          files: ['./images/Ghost_of_the_deep.jpg']
+        });
+      } else {
+        await channel.send('⚠️ Aucun donjon reconnu actuellement en contest.');
+      }
+    };
+
+    // Dates spécifiques
+    if (
+      now.getFullYear() === 2025 &&
+      now.getMonth() === 4 &&
+      now.getDate() === 13 &&
+      now.getHours() === 19
+    ) {
+      if (element.hasClass('prophecy')) {
+        await sendDungeonMessage('prophecy');
+      } else {
+        await sendDungeonMessage('ghost_of_the_deep');
+      }
+
+    } else if (
+      now.getFullYear() === 2025 &&
+      now.getMonth() === 4 &&
+      now.getDate() === 20 &&
+      now.getHours() === 19
+    ) {
+      if (element.hasClass('ghost_of_the_deep')) {
+        await sendDungeonMessage('ghost_of_the_deep');
+      } else {
+        await sendDungeonMessage('prophecy');
+      }
+
+    } else {
+      // Pour toutes les autres dates
+      if (element.hasClass('prophecy')) {
+        await sendDungeonMessage('prophecy');
+      } else if (element.hasClass('ghost_of_the_deep')) {
+        await sendDungeonMessage('ghost_of_the_deep');
+      } else {
+        await sendDungeonMessage('none');
+      }
+    }
+
+  } catch (error) {
+    console.error("Erreur lors de l'exécution du message dans le salon :", error);
+  }
+}, 5000); // Exécution différée de 5 secondes
 
 
-// Commandes
+// Event listeners
 client.on('messageCreate', handleCommands);
-
-// Gérer les interactions
 client.on(Events.InteractionCreate, handleInteraction);
-
-// Connexion du bot à Discord
-client.login(token)
+client.login(token);
