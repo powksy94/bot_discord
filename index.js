@@ -337,7 +337,6 @@ client.once('ready', async () => {
 
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-const $ = cheerio.load(html);
 
 setTimeout(async () => {
   try {
