@@ -334,11 +334,9 @@ client.once('ready', async () => {
   await handleSoundsCommand();
 })
 
-const axios = require('axios');
-const cheerio = require('cheerio');
 
-const axios = require('axios');
-const cheerio = require('cheerio');
+import axios from 'axios';
+import cheerio from'cheerio';
 
 setTimeout(async () => {
   try {
