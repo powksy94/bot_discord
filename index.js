@@ -336,7 +336,8 @@ client.once('ready', async () => {
 
 
 import axios from 'axios';
-import cheerio from'cheerio';
+import * as cheerio from 'cheerio';
+const $ = cheerio.load(html);
 
 setTimeout(async () => {
   try {
@@ -350,7 +351,7 @@ setTimeout(async () => {
     const url = 'https://www.todayindestiny.com/';
     const response = await axios.get(url);
     const $ = cheerio.load(response.data);
-    const element = $('.eventCardHeaderSet');
+    const element = $('.eventCardHeaderName');
 
     // Fonction d'envoi selon le donjon détecté
     const sendDungeonMessage = async (type) => {
