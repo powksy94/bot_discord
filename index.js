@@ -375,7 +375,7 @@ setTimeout(async () => {
     if (
       now.getFullYear() === 2025 &&
       now.getMonth() === 4 &&
-      now.getDate() === 27 &&
+      now.getDate() === 20 &&
       now.getHours() === 19 &&
       now.getMinutes() === 1
     ) {
@@ -388,7 +388,7 @@ setTimeout(async () => {
     } else if (
       now.getFullYear() === 2025 &&
       now.getMonth() === 5 &&
-      now.getDate() === 17 &&
+      now.getDate() === 3 &&
       now.getHours() === 19 &&
       now.getMinutes() === 1
     ) {
