@@ -375,8 +375,9 @@ setTimeout(async () => {
     if (
       now.getFullYear() === 2025 &&
       now.getMonth() === 4 &&
-      now.getDate() === 13 &&
-      now.getHours() === 19
+      now.getDate() === 27 &&
+      now.getHours() === 19 &&
+      now.getMinutes() === 1
     ) {
       if (element.hasClass('prophecy')) {
         await sendDungeonMessage('prophecy');
@@ -386,9 +387,10 @@ setTimeout(async () => {
 
     } else if (
       now.getFullYear() === 2025 &&
-      now.getMonth() === 4 &&
-      now.getDate() === 20 &&
-      now.getHours() === 19
+      now.getMonth() === 5 &&
+      now.getDate() === 17 &&
+      now.getHours() === 19 &&
+      now.getMinutes() === 1
     ) {
       if (element.hasClass('ghost_of_the_deep')) {
         await sendDungeonMessage('ghost_of_the_deep');
