@@ -1,6 +1,21 @@
 import dotenv from 'dotenv';
-import { Client, GatewayIntentBits, ChannelType, ActionRowBuilder, StringSelectMenuBuilder, Events } from 'discord.js';
-import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, entersState, VoiceConnectionStatus } from '@discordjs/voice';
+import {
+  Client,
+  GatewayIntentBits,
+  ChannelType,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  Events,
+  EmbedBuilder
+} from 'discord.js';
+import {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  entersState,
+  VoiceConnectionStatus
+} from '@discordjs/voice';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -13,48 +28,60 @@ const token = process.env.DISCORD_TOKEN;
 
 if (!token) {
   console.error("❌ Le token Discord (DISCORD_TOKEN) est manquant. Vérifie ton .env ou les variables Railway.");
-  process.exit(1); // stoppe l'application
+  process.exit(1);
 }
-
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers, // Nécessaire pour accéder aux membres
-    GatewayIntentBits.GuildVoiceStates, // Ajout pour le vocal
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
 let citations = [];
 
-// Fonction pour charger les citations
+/* ----------------------------------------------------------
+   🔄 Fonction améliorée pour charger les citations
+---------------------------------------------------------- */
 async function loadCitations() {
   try {
-    const guild = client.guilds.cache.first(); // On suppose qu'il n'y a qu'un seul serveur
+    // Vide la liste précédente pour éviter les doublons
+    citations = [];
 
+    const guild = client.guilds.cache.first();
     if (!guild) {
       console.error("❌ Aucune guilde trouvée !");
       return;
     }
 
-    const category = guild.channels.cache.find(ch => ch.type === ChannelType.GuildCategory && ch.name === 'La Tour');
+    const category = guild.channels.cache.find(
+      ch => ch.type === ChannelType.GuildCategory && ch.name.toLowerCase() === 'la tour'
+    );
     if (!category) {
       console.error("❌ La catégorie 'La Tour' n'a pas été trouvée !");
       return;
     }
 
-    const channel = guild.channels.cache.find(ch => ch.type === ChannelType.GuildText && ch.parentId === category.id && ch.name === 'citations');
+    const channel = guild.channels.cache.find(
+      ch => ch.type === ChannelType.GuildText && ch.parentId === category.id && ch.name.toLowerCase() === 'citations'
+    );
     if (!channel) {
       console.error("❌ Le canal 'citations' n'a pas été trouvé dans la catégorie 'La Tour' !");
       return;
     }
 
+    // Récupère les 100 derniers messages
     const messages = await channel.messages.fetch({ limit: 100 });
+
     messages.forEach(msg => {
+      if (!msg.content.includes(':')) return;
+
       const [auteur, ...citationParts] = msg.content.split(':');
       const citation = citationParts.join(':').trim();
+
       if (auteur && citation) {
         citations.push({ auteur: auteur.trim(), citation });
       }
@@ -62,15 +89,15 @@ async function loadCitations() {
 
     console.log(`✅ ${citations.length} citation(s) chargée(s) depuis #citations.`);
   } catch (error) {
-    console.error("Erreur lors du chargement des citations : ", error);
+    console.error("❌ Erreur lors du chargement des citations :", error);
   }
 }
 
-let soundFiles = []; // Variable globale pour stocker la liste des fichiers sons
+/* ----------------------------------------------------------
+   🎵 Partie sons (inchangée)
+---------------------------------------------------------- */
+let soundFiles = [];
 
-
-
-// Fonction pour recharger la liste des sons
 async function handleSoundsCommand() {
   const soundsDir = path.join(__dirname, 'sounds');
 
@@ -83,7 +110,6 @@ async function handleSoundsCommand() {
     return 'Aucun son .ogg disponible.';
   }
 
-  // Mise à jour de la variable globale
   soundFiles = files.map(file => ({
     label: file.replace('.ogg', ''),
     value: file.replace('.ogg', '')
@@ -92,19 +118,17 @@ async function handleSoundsCommand() {
   return `${files.length} son(s) rechargé(s).`;
 }
 
-// Commande pour recharger la liste des sons
 client.on('messageCreate', async (message) => {
   if (message.content === '!reload_sounds') {
     const result = await handleSoundsCommand();
-    message.reply(result);  // Retourne une réponse indiquant si les sons ont été rechargés
+    message.reply(result);
   }
 });
 
-
-// Gérer les interactions pour jouer des sons ou des citations
+/* ----------------------------------------------------------
+   🔊 Gestion des interactions pour jouer les sons
+---------------------------------------------------------- */
 client.on(Events.InteractionCreate, async (interaction) => {
-
-
   if (interaction.customId === 'select-sound') {
     const soundName = interaction.values[0];
     const soundPath = path.join(__dirname, 'sounds', `${soundName}.ogg`);
@@ -131,7 +155,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
       const resource = createAudioResource(soundPath);
       const player = createAudioPlayer();
-      // On rejoint le salon vocal de l'utilisateur
 
       connection.subscribe(player);
       player.play(resource);
@@ -144,25 +167,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } catch (error) {
       console.error(error);
       interaction.reply({ content: 'Erreur lors de la lecture.', ephemeral: true });
-      connection.destroy();
     }
-
-    // Exemple d'ajout de volume via commande
-    if (interaction.customId === 'select-volume') {
-      const volume = interaction.values[0]; // Par exemple, 0.5, 1, 2
-      if (isNaN(volume)) {
-        await interaction.reply({ content: 'Volume invalide.', ephemeral: true });
-        return;
-      }
-      // Applique le volume sélectionné à la lecture du son
-      playSound(interaction, soundName, volume); // Fonction playSound modifiée pour accepter le volume
-    }
-
-
   }
-})
+});
 
-// Fonction pour récupérer tous les membres ayant le rôle "Zen" (en ligne ou non)
+/* ----------------------------------------------------------
+   🧘‍♂️ Récupération des membres Zen (inchangée)
+---------------------------------------------------------- */
 async function getAllZenMembers(message) {
   try {
     const roleZen = message.guild.roles.cache.find(role => role.name === "Zen");
@@ -172,12 +183,8 @@ async function getAllZenMembers(message) {
       return [];
     }
 
-    // On s'assure que tous les membres sont bien récupérés
     await message.guild.members.fetch();
-
-    // Filtrer les membres du rôle Zen (en excluant les bots)
     const zenMembers = roleZen.members.filter(member => !member.user.bot);
-
     console.log(`✅ ${zenMembers.size} membre(s) ont le rôle 'Zen'.`);
 
     return zenMembers;
@@ -186,7 +193,10 @@ async function getAllZenMembers(message) {
     return [];
   }
 }
-// Fonction pour gérer les commandes
+
+/* ----------------------------------------------------------
+   💬 Gestion des commandes utilisateur
+---------------------------------------------------------- */
 async function handleCommands(message) {
   if (message.author.bot) return;
 
@@ -214,7 +224,9 @@ async function handleCommands(message) {
   }
 }
 
-// Fonction pour gérer les interactions
+/* ----------------------------------------------------------
+   ⚙️ Gestion des interactions (modifiée pour citations)
+---------------------------------------------------------- */
 async function handleInteraction(interaction) {
   if (!interaction.isStringSelectMenu()) return;
 
@@ -225,25 +237,28 @@ async function handleInteraction(interaction) {
       case 'bonjour':
         await interaction.reply('Bonjour ! Je suis ton bot.');
         break;
+
       case 'aide':
         await interaction.reply('Voici les commandes disponibles : `!bonjour`, `!aide`, `!citation [auteur]`, `!Meteo`, `!Zen`');
         break;
+
       case 'messi':
         await interaction.reply('Shreuuu est LE Messi, Notre Messi');
         break;
+
       case 'zen':
         await interaction.reply('Voici les membres Zen...');
         break;
+
       case 'sounds': {
         await interaction.deferReply();
         await handleSoundsCommand();
 
         if (soundFiles.length === 0) {
-          return message.reply('Aucun son disponible.');
+          return interaction.editReply('Aucun son disponible.');
         }
 
-        const options = soundFiles.slice(0, 25); // Limite à 25 sons
-
+        const options = soundFiles.slice(0, 25);
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId('select-sound')
           .setPlaceholder('Choisis un son à jouer')
@@ -257,6 +272,7 @@ async function handleInteraction(interaction) {
         });
         break;
       }
+
       case 'meteo': {
         const zenMembers = await getAllZenMembers(interaction);
 
@@ -283,11 +299,19 @@ async function handleInteraction(interaction) {
           content: 'Veuillez sélectionner un membre Zen :',
           components: [zenRow],
         });
-
         break;
       }
+
+      /* ----------------------------------------------------------
+         ✨ Nouvelle gestion améliorée de la commande !citation
+      ---------------------------------------------------------- */
       case 'citation': {
-        const options = citations.map((citation, index) => ({
+        if (citations.length === 0) {
+          await interaction.reply('⚠️ Aucune citation trouvée. Vérifie le salon #citations.');
+          return;
+        }
+
+        const options = citations.slice(0, 25).map((citation, index) => ({
           label: `Citation de ${citation.auteur}`,
           description: citation.citation.slice(0, 50) + '...',
           value: index.toString(),
@@ -300,9 +324,13 @@ async function handleInteraction(interaction) {
 
         const citationRow = new ActionRowBuilder().addComponents(citationMenu);
 
-        await interaction.reply({ content: 'Sélectionne une citation :', components: [citationRow] });
+        await interaction.reply({
+          content: '📖 Sélectionne une citation :',
+          components: [citationRow],
+        });
         break;
       }
+
       default:
         await interaction.reply("Commande non reconnue.");
         break;
@@ -318,25 +346,40 @@ async function handleInteraction(interaction) {
     });
   }
 
+  /* ----------------------------------------------------------
+     🗣️ Réponse stylée quand une citation est choisie
+  ---------------------------------------------------------- */
   if (interaction.customId === 'menu_citations') {
-    const selected = parseInt(interaction.values[0], 10);
-    const citation = citations[selected];
-    await interaction.reply({
-      content: `${citation.auteur} a dit : "${citation.citation}"`,
-    });
+    const selectedIndex = parseInt(interaction.values[0], 10);
+    const citation = citations[selectedIndex];
+
+    if (!citation) {
+      await interaction.reply({
+        content: "❌ Citation introuvable ou supprimée.",
+        ephemeral: true
+      });
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#f5c518')
+      .setTitle(`💬 Citation de ${citation.auteur}`)
+      .setDescription(`"${citation.citation}"`)
+      .setFooter({ text: `Demandé par ${interaction.user.username}` });
+
+    await interaction.reply({ embeds: [embed] });
   }
 }
 
-// Fonction d'initialisation
+/* ----------------------------------------------------------
+   🚀 Initialisation du bot
+---------------------------------------------------------- */
 client.once('ready', async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   await loadCitations();
   await handleSoundsCommand();
-})
+});
 
-
-
-// Event listeners
 client.on('messageCreate', handleCommands);
 client.on(Events.InteractionCreate, handleInteraction);
 client.login(token);
