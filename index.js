@@ -257,46 +257,68 @@ async function handleCommands(message) {
 
   const content = message.content.toLowerCase();
 
-  switch (content) {
-    case "!": {
-      const commandMenu = new StringSelectMenuBuilder()
-        .setCustomId("command_menu")
-        .setPlaceholder("Choisissez une commande")
-        .addOptions([
-          { label: "!Bonjour", value: "bonjour", description: "Dire bonjour" },
-          {
-            label: "!Aide",
-            value: "aide",
-            description: "Voir les commandes disponibles",
-          },
-          {
-            label: "!citation",
-            value: "citation",
-            description: "Obtenir une citation",
-          },
-          { label: "!Météo", value: "meteo", description: "Le fameux Meteo" },
-          { label: "!Zen", value: "zen", description: "Voir les membres Zen" },
-          {
-            label: "!Messi",
-            value: "messi",
-            description: "Un message légendaire",
-          },
-          {
-            label: "!sounds",
-            value: "sounds",
-            description: "de magnifiques sons",
-          },
-        ]);
+  // ------------------------------
+  // Commande menu principale "!"
+  // ------------------------------
+  if (content === "!") {
+    const commandMenu = new StringSelectMenuBuilder()
+      .setCustomId("command_menu")
+      .setPlaceholder("Choisissez une commande")
+      .addOptions([
+        { label: "!Bonjour", value: "bonjour", description: "Dire bonjour" },
+        { label: "!Aide", value: "aide", description: "Voir les commandes disponibles" },
+        { label: "!Citation", value: "citation", description: "Obtenir une citation" },
+        { label: "!Météo", value: "meteo", description: "Le fameux Meteo" },
+        { label: "!Zen", value: "zen", description: "Voir les membres Zen" },
+        { label: "!Messi", value: "messi", description: "Un message légendaire" },
+        { label: "!Sounds", value: "sounds", description: "Jouer des sons disponibles" },
+      ]);
 
-      const commandRow = new ActionRowBuilder().addComponents(commandMenu);
-      await message.channel.send({
-        content: "Voici les commandes disponibles :",
-        components: [commandRow],
-      });
+    const commandRow = new ActionRowBuilder().addComponents(commandMenu);
+
+    await message.channel.send({
+      content: "Voici les commandes disponibles :",
+      components: [commandRow],
+    });
+
+    return; // fin de la commande !
+  }
+
+  // ------------------------------
+  // Commande !citation [auteur]
+  // ------------------------------
+  if (content.startsWith("!citation")) {
+    const args = message.content.split(" ").slice(1); // récupère l'auteur si spécifié
+    let filtered = citations;
+
+    if (args.length > 0) {
+      const auteurRecherche = args.join(" ").toLowerCase();
+      filtered = citations.filter(c =>
+        c.auteurDiscord.username.toLowerCase().includes(auteurRecherche)
+      );
+    }
+
+    if (filtered.length === 0) {
+      message.reply("⚠️ Aucune citation trouvée pour cet auteur.");
       return;
     }
+
+    const citation = filtered[Math.floor(Math.random() * filtered.length)];
+    const embed = new EmbedBuilder()
+      .setColor("#f5c518")
+      .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
+      .setDescription(
+        citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")
+      );
+
+    message.reply({ embeds: [embed] });
   }
+
+  // ------------------------------
+  // Tu peux ajouter d'autres commandes texte ici si nécessaire
+  // ------------------------------
 }
+
 
 /* ----------------------------------------------------------
    ⚙️ Gestion des interactions (modifiée pour citations)
@@ -306,6 +328,9 @@ async function handleInteraction(interaction) {
 
   const selected = interaction.values[0];
 
+  // ------------------------------
+  // Menu principal des commandes
+  // ------------------------------
   if (interaction.customId === "command_menu") {
     switch (selected) {
       case "bonjour":
@@ -314,7 +339,7 @@ async function handleInteraction(interaction) {
 
       case "aide":
         await interaction.reply(
-          "Voici les commandes disponibles : `!bonjour`, `!aide`, `!citation [auteur]`, `!Meteo`, `!Zen`"
+          "Voici les commandes disponibles : `!bonjour`, `!aide`, `!citation [auteur]`, `!Météo`, `!Zen`, `!Messi`, `!Sounds`"
         );
         break;
 
@@ -322,9 +347,36 @@ async function handleInteraction(interaction) {
         await interaction.reply("Shreuuu est LE Messi, Notre Messi");
         break;
 
-      case "zen":
-        await interaction.reply("Voici les membres Zen...");
+      case "zen": {
+        const zenMembers = await getAllZenMembers(interaction);
+
+        if (zenMembers.size === 0) {
+          await interaction.reply("Aucun membre avec le rôle Zen trouvé.");
+          return;
+        }
+
+        const options = Array.from(zenMembers.values())
+          .map(member => ({
+            label: member.user.username,
+            value: member.id,
+            description: `Utilisateur : ${member.user.tag}`,
+            emoji: "🧘‍♂️",
+          }))
+          .slice(0, 25);
+
+        const zenMenu = new StringSelectMenuBuilder()
+          .setCustomId("select_pseudo")
+          .setPlaceholder("Choisissez un membre Zen")
+          .addOptions(options);
+
+        const zenRow = new ActionRowBuilder().addComponents(zenMenu);
+
+        await interaction.reply({
+          content: "Veuillez sélectionner un membre Zen :",
+          components: [zenRow],
+        });
         break;
+      }
 
       case "sounds": {
         await interaction.deferReply();
@@ -349,40 +401,6 @@ async function handleInteraction(interaction) {
         break;
       }
 
-      case "meteo": {
-        const zenMembers = await getAllZenMembers(interaction);
-
-        if (zenMembers.size === 0) {
-          await interaction.reply("Aucun membre avec le rôle Zen trouvé.");
-          return;
-        }
-
-        const options = Array.from(zenMembers.values())
-          .map((member) => ({
-            label: member.user.username,
-            value: member.id,
-            description: `Utilisateur : ${member.user.tag}`,
-            emoji: "🧘‍♂️",
-          }))
-          .slice(0, 25);
-
-        const zenMenu = new StringSelectMenuBuilder()
-          .setCustomId("select_pseudo")
-          .setPlaceholder("Choisissez un membre Zen")
-          .addOptions(options);
-
-        const zenRow = new ActionRowBuilder().addComponents(zenMenu);
-
-        await interaction.reply({
-          content: "Veuillez sélectionner un membre Zen :",
-          components: [zenRow],
-        });
-        break;
-      }
-
-      /* ----------------------------------------------------------
-         ✨ Nouvelle gestion améliorée de la commande !citation
-      ---------------------------------------------------------- */
       case "citation": {
         if (citations.length === 0) {
           await interaction.reply(
@@ -391,11 +409,14 @@ async function handleInteraction(interaction) {
           return;
         }
 
-        const options = citations.slice(0, 25).map((citation, index) => ({
-          label: `Citation de ${citation.auteur}`,
-          description: citation.citation.slice(0, 50) + "...",
-          value: index.toString(),
-        }));
+        const options = citations.slice(0, 25).map((c, index) => {
+          const texte = c.dialogue.map(d => `${d.auteurMention}: ${d.texte}`).join(" | ");
+          return {
+            label: `Citation de ${c.auteurDiscord.username}`,
+            description: texte.slice(0, 50) + "...",
+            value: index.toString(),
+          };
+        });
 
         const citationMenu = new StringSelectMenuBuilder()
           .setCustomId("menu_citations")
@@ -411,26 +432,31 @@ async function handleInteraction(interaction) {
         break;
       }
 
+      case "meteo":
+        // Peut rester vide si tu gères avec le menu "select_pseudo"
+        break;
+
       default:
         await interaction.reply("Commande non reconnue.");
         break;
     }
   }
 
+  // ------------------------------
+  // Menu sélection membre Zen
+  // ------------------------------
   if (interaction.customId === "select_pseudo") {
     const selectedMemberId = interaction.values[0];
-    const selectedMember = await interaction.guild.members.fetch(
-      selectedMemberId
-    );
+    const selectedMember = await interaction.guild.members.fetch(selectedMemberId);
 
     await interaction.reply({
       content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
     });
   }
 
-  /* ----------------------------------------------------------
-     🗣️ Réponse stylée quand une citation est choisie
-  ---------------------------------------------------------- */
+  // ------------------------------
+  // Menu sélection citation
+  // ------------------------------
   if (interaction.customId === "menu_citations") {
     const selectedIndex = parseInt(interaction.values[0], 10);
     const citation = citations[selectedIndex];
@@ -445,13 +471,16 @@ async function handleInteraction(interaction) {
 
     const embed = new EmbedBuilder()
       .setColor("#f5c518")
-      .setTitle(`💬 Citation de ${citation.auteur}`)
-      .setDescription(`"${citation.citation}"`)
+      .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
+      .setDescription(
+        citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")
+      )
       .setFooter({ text: `Demandé par ${interaction.user.username}` });
 
     await interaction.reply({ embeds: [embed] });
   }
 }
+
 
 /* ----------------------------------------------------------
    🚀 Initialisation du bot
