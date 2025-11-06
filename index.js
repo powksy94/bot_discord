@@ -71,7 +71,12 @@ async function loadCitations() {
     const messages = await channel.messages.fetch({ limit: 100 });
 
     for (const msg of Array.from(messages.values()).reverse()) {
-      if (!msg.content || msg.attachments.size > 0 || msg.content.match(/https?:\/\//)) continue;
+      if (
+        !msg.content ||
+        msg.attachments.size > 0 ||
+        msg.content.match(/https?:\/\//)
+      )
+        continue;
 
       let contenu = msg.content
         .replace(/<a?:\w+:\d+>/g, "")
@@ -83,13 +88,21 @@ async function loadCitations() {
         .replace(/<@&[0-9]+>/g, "")
         .trim();
 
-      const lignes = contenu.split("\n").map(l => l.trim()).filter(Boolean);
+      const lignes = contenu
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
       const dialogues = [];
 
       for (const ligne of lignes) {
         const match = ligne.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
-        if (match) dialogues.push({ auteurMention: match[1].trim(), texte: match[2].trim() });
-        else if (dialogues.length === 0) dialogues.push({ auteurMention: "📜", texte: ligne });
+        if (match)
+          dialogues.push({
+            auteurMention: match[1].trim(),
+            texte: match[2].trim(),
+          });
+        else if (dialogues.length === 0)
+          dialogues.push({ auteurMention: "📜", texte: ligne });
         else dialogues[dialogues.length - 1].texte += " " + ligne;
       }
 
@@ -120,10 +133,13 @@ async function handleSoundsCommand() {
   const soundsDir = path.join(__dirname, "sounds");
   if (!fs.existsSync(soundsDir)) return "Le dossier des sons n'existe pas.";
 
-  const files = fs.readdirSync(soundsDir).filter(f => f.endsWith(".ogg"));
+  const files = fs.readdirSync(soundsDir).filter((f) => f.endsWith(".ogg"));
   if (files.length === 0) return "Aucun son .ogg disponible.";
 
-  soundFiles = files.map(f => ({ label: f.replace(".ogg", ""), value: f.replace(".ogg", "") }));
+  soundFiles = files.map((f) => ({
+    label: f.replace(".ogg", ""),
+    value: f.replace(".ogg", ""),
+  }));
   return `${files.length} son(s) rechargé(s).`;
 }
 
@@ -133,9 +149,9 @@ async function handleSoundsCommand() {
 async function getAllZenMembers(guild) {
   try {
     await guild.members.fetch();
-    const roleZen = guild.roles.cache.find(r => r.name === "Zen");
+    const roleZen = guild.roles.cache.find((r) => r.name === "Zen");
     if (!roleZen) return [];
-    return roleZen.members.filter(m => !m.user.bot);
+    return roleZen.members.filter((m) => !m.user.bot);
   } catch (err) {
     console.error("❌ Erreur lors de la récupération des membres Zen :", err);
     return [];
@@ -163,22 +179,35 @@ async function handleCommands(message) {
         { label: "!Messi", value: "messi" },
         { label: "!Sounds", value: "sounds" },
       ]);
-    await message.channel.send({ content: "Voici les commandes disponibles :", components: [new ActionRowBuilder().addComponents(menu)] });
+    await message.channel.send({
+      content: "Voici les commandes disponibles :",
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
     return;
   }
 
   if (content.startsWith("!citation")) {
     const args = message.content.split(" ").slice(1);
     let filtered = citations;
-    if (args.length > 0) filtered = citations.filter(c => c.auteurDiscord.username.toLowerCase().includes(args.join(" ").toLowerCase()));
+    if (args.length > 0)
+      filtered = citations.filter((c) =>
+        c.auteurDiscord.username
+          .toLowerCase()
+          .includes(args.join(" ").toLowerCase())
+      );
 
-    if (filtered.length === 0) return message.reply("⚠️ Aucune citation trouvée.");
+    if (filtered.length === 0)
+      return message.reply("⚠️ Aucune citation trouvée.");
 
     const citation = filtered[Math.floor(Math.random() * filtered.length)];
     const embed = new EmbedBuilder()
       .setColor("#f5c518")
       .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
-      .setDescription(citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n"));
+      .setDescription(
+        citation.dialogue
+          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
+          .join("\n")
+      );
     message.reply({ embeds: [embed] });
   }
 }
@@ -194,21 +223,54 @@ async function handleInteraction(interaction) {
   // Menu principal
   if (interaction.customId === "command_menu") {
     switch (selected) {
-      case "bonjour": return interaction.reply("Bonjour ! Je suis ton bot.");
-      case "aide": return interaction.reply("Commandes : !bonjour, !aide, !citation [auteur], !Météo, !Zen, !Messi, !Sounds");
-      case "messi": return interaction.reply("Shreuuu est LE Messi, Notre Messi");
+      case "bonjour":
+        return interaction.reply("Bonjour ! Je suis ton bot.");
+      case "aide":
+        return interaction.reply(
+          "Commandes : !bonjour, !aide, !citation [auteur], !Météo, !Zen, !Messi, !Sounds"
+        );
+      case "messi":
+        return interaction.reply("Shreuuu est LE Messi, Notre Messi");
       case "sounds":
         await interaction.deferReply();
         await handleSoundsCommand();
-        if (soundFiles.length === 0) return interaction.editReply("Aucun son disponible.");
-        const menuSounds = new StringSelectMenuBuilder().setCustomId("select-sound").setPlaceholder("Choisis un son à jouer").addOptions(soundFiles.slice(0, 25));
-        return interaction.editReply({ content: "🎵 Sélectionne un son :", components: [new ActionRowBuilder().addComponents(menuSounds)] });
+        if (soundFiles.length === 0)
+          return interaction.editReply("Aucun son disponible.");
+        const menuSounds = new StringSelectMenuBuilder()
+          .setCustomId("select-sound")
+          .setPlaceholder("Choisis un son à jouer")
+          .addOptions(soundFiles.slice(0, 25));
+        return interaction.editReply({
+          content: "🎵 Sélectionne un son :",
+          components: [new ActionRowBuilder().addComponents(menuSounds)],
+        });
       case "citation":
-        if (citations.length === 0) return interaction.reply("⚠️ Aucune citation trouvée.");
-        const options = citations.slice(0, 25).map((c, i) => ({ label: `Citation de ${c.auteurDiscord.username}`, description: c.dialogue.map(d => `${d.auteurMention}: ${d.texte}`).join(" | ").slice(0, 50) + "...", value: i.toString() }));
-        return interaction.reply({ content: "📖 Sélectionne une citation :", components: [new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId("menu_citations").setPlaceholder("Choisis une citation").addOptions(options))] });
-      case "zen": return showZenMenu(interaction, "Zen");
-      case "meteo": return showZenMenu(interaction, "Météo", "Le fameux Météo !");
+        if (citations.length === 0)
+          return interaction.reply("⚠️ Aucune citation trouvée.");
+        const options = citations.slice(0, 25).map((c, i) => ({
+          label: `Citation de ${c.auteurDiscord.username}`,
+          description:
+            c.dialogue
+              .map((d) => `${d.auteurMention}: ${d.texte}`)
+              .join(" | ")
+              .slice(0, 50) + "...",
+          value: i.toString(),
+        }));
+        return interaction.reply({
+          content: "📖 Sélectionne une citation :",
+          components: [
+            new ActionRowBuilder().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId("menu_citations")
+                .setPlaceholder("Choisis une citation")
+                .addOptions(options)
+            ),
+          ],
+        });
+      case "zen":
+        return showZenMenu(interaction, "Zen");
+      case "meteo":
+        return showZenMenu(interaction, "Météo", "Le fameux Météo !");
     }
   }
 
@@ -217,61 +279,115 @@ async function handleInteraction(interaction) {
     const soundPath = path.join(__dirname, "sounds", `${selected}.ogg`);
     const member = interaction.guild.members.cache.get(interaction.user.id);
     const voiceChannel = member?.voice.channel;
-    if (!voiceChannel) return interaction.reply({ content: "Tu dois être dans un salon vocal.", ephemeral: true });
-    if (!fs.existsSync(soundPath)) return interaction.reply({ content: "Son introuvable.", ephemeral: true });
+    if (!voiceChannel)
+      return interaction.reply({
+        content: "Tu dois être dans un salon vocal.",
+        ephemeral: true,
+      });
+    if (!fs.existsSync(soundPath))
+      return interaction.reply({
+        content: "Son introuvable.",
+        ephemeral: true,
+      });
 
     try {
-      const connection = joinVoiceChannel({ channelId: voiceChannel.id, guildId: interaction.guild.id, adapterCreator: interaction.guild.voiceAdapterCreator });
+      const connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: interaction.guild.id,
+        adapterCreator: interaction.guild.voiceAdapterCreator,
+      });
       await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
       const player = createAudioPlayer();
       connection.subscribe(player);
       player.play(createAudioResource(soundPath));
       player.on(AudioPlayerStatus.Idle, () => connection.destroy());
-      interaction.reply({ content: `▶️ Lecture de **${selected}**`, ephemeral: false });
+      interaction.reply({
+        content: `▶️ Lecture de **${selected}**`,
+        ephemeral: false,
+      });
     } catch (err) {
       console.error(err);
-      interaction.reply({ content: "Erreur lors de la lecture.", ephemeral: true });
+      interaction.reply({
+        content: "Erreur lors de la lecture.",
+        ephemeral: true,
+      });
     }
   }
 
-  // Menu Zen/Météo
-  if (interaction.customId.startsWith("select_pseudo_")) {
-    const type = interaction.customId.split("_")[2]; // zen ou meteo
-    const selectedMember = await interaction.guild.members.fetch(selected);
-    if (type === "zen") interaction.reply({ content: `Membre Zen sélectionné : ${selectedMember.user.tag}`, ephemeral: true });
-    else if (type === "meteo") interaction.reply({ content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`, ephemeral: true });
+  async function showZenMenu(interaction, type, message = null) {
+    const zenMembers = await getAllZenMembers(interaction.guild);
+    if (!zenMembers || zenMembers.length === 0)
+      return interaction.reply({
+        content: "Aucun membre Zen trouvé.",
+        ephemeral: true,
+      });
+
+    const options = zenMembers.slice(0, 25).map((m) => ({
+      label: m.user.username,
+      value: m.id,
+      description: `Utilisateur : ${m.user.tag}`,
+      emoji: "🧘‍♂️",
+    }));
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`select_pseudo_${type.toLowerCase()}`)
+      .setPlaceholder(`Choisissez un membre pour ${type}`)
+      .addOptions(options);
+
+    await interaction.reply({
+      content: message || `Veuillez sélectionner un membre pour ${type} :`,
+      components: [new ActionRowBuilder().addComponents(menu)],
+      ephemeral: true,
+    });
+
+    // Gestion de la sélection
+    if (interaction.customId.startsWith("select_pseudo_")) {
+      const type = interaction.customId.split("_")[2]; // zen ou meteo
+      const selectedMember = await interaction.guild.members.fetch(
+        interaction.values[0]
+      );
+
+      await interaction.deferReply({ ephemeral: true });
+
+      if (type === "zen") {
+        await interaction.followUp({
+          content: `Membre Zen sélectionné : ${selectedMember.user.tag}`,
+          ephemeral: true,
+        });
+      } else if (type === "meteo") {
+        await interaction.followUp({
+          content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
+          ephemeral: true,
+        });
+      }
+    }
+
+    // Menu citations
+    if (interaction.customId === "menu_citations") {
+      const citation = citations[parseInt(selected, 10)];
+      if (!citation)
+        return interaction.reply({
+          content: "❌ Citation introuvable.",
+          ephemeral: true,
+        });
+      const embed = new EmbedBuilder()
+        .setColor("#f5c518")
+        .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
+        .setDescription(
+          citation.dialogue
+            .map((d) => `**${d.auteurMention}**: ${d.texte}`)
+            .join("\n")
+        )
+        .setFooter({ text: `Demandé par ${interaction.user.username}` });
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      else await interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
   }
 
-  // Menu citations
-  if (interaction.customId === "menu_citations") {
-    const citation = citations[parseInt(selected, 10)];
-    if (!citation) return interaction.reply({ content: "❌ Citation introuvable.", ephemeral: true });
-    const embed = new EmbedBuilder().setColor("#f5c518").setTitle(`💬 Citation de ${citation.auteurDiscord.username}`).setDescription(citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")).setFooter({ text: `Demandé par ${interaction.user.username}` });
-    if (!interaction.replied && !interaction.deferred) await interaction.reply({ embeds: [embed], ephemeral: true });
-    else await interaction.followUp({ embeds: [embed], ephemeral: true });
-  }
-}
-
-/* ----------------------------------------------------------
+  /* ----------------------------------------------------------
    🔹 Fonction pour afficher le menu Zen/Météo
 ---------------------------------------------------------- */
-async function showZenMenu(interaction, type, message = null) {
-  const zenMembers = await getAllZenMembers(interaction.guild);
-  if (zenMembers.size === 0) return interaction.reply({ content: "Aucun membre Zen trouvé.", ephemeral: true });
-
-  const options = Array.from(zenMembers.values()).map(m => ({
-    label: m.user.username,
-    value: m.id,
-    description: `Utilisateur : ${m.user.tag}`,
-    emoji: "🧘‍♂️",
-  })).slice(0, 25);
-
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`select_pseudo_${type.toLowerCase()}`)
-    .setPlaceholder(`Choisissez un membre pour ${type}`)
-    .addOptions(options);
-
-  await interaction.reply({ content: message || `Veuillez sélectionner un membre pour ${type} :`, components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
 }
 
 /* ----------------------------------------------------------
