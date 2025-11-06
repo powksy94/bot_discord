@@ -50,7 +50,6 @@ let citations = [];
 ---------------------------------------------------------- */
 async function loadCitations() {
   try {
-    // Vide la liste précédente pour éviter les doublons
     citations = [];
 
     const guild = client.guilds.cache.first();
@@ -76,43 +75,52 @@ async function loadCitations() {
         ch.name.toLowerCase() === "citations"
     );
     if (!channel) {
-      console.error(
-        "❌ Le canal 'citations' n'a pas été trouvé dans la catégorie 'La Tour' !"
-      );
+      console.error("❌ Le canal 'citations' n'a pas été trouvé !");
       return;
     }
 
-    // Récupère les 100 derniers messages du salon
     const messages = await channel.messages.fetch({ limit: 100 });
 
-    // Les messages sont récupérés du plus récent au plus ancien → on inverse pour l'ordre naturel
     for (const msg of Array.from(messages.values()).reverse()) {
-      // Ignore les messages non textuels
       if (!msg.content) continue;
       if (msg.attachments.size > 0) continue;
       if (msg.content.match(/https?:\/\//)) continue;
 
-      // Sépare les lignes (au cas où le message contient plusieurs dialogues)
-      const lignes = msg.content.split("\n");
+      // 🔹 Nettoyage du contenu (enlève mentions et emojis)
+      let contenu = msg.content
+        .replace(/<a?:\w+:\d+>/g, "") // emojis personnalisés
+        .replace(/<@!?(\d+)>/g, (m, id) => {
+          const user = msg.guild.members.cache.get(id);
+          return user ? `@${user.user.username}` : "@inconnu";
+        })
+        .replace(/<#[0-9]+>/g, "") // tags de salons
+        .replace(/<@&[0-9]+>/g, "") // mentions de rôles
+        .trim();
+
+      const lignes = contenu
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
       const dialogues = [];
 
       for (const ligne of lignes) {
-        const trimmed = ligne.trim();
-        if (!trimmed) continue;
-
-        const match = trimmed.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
-        if (!match) continue;
-
-        const auteurMention = match[1].trim();
-        const texte = match[2].trim();
-
-        dialogues.push({
-          auteurMention,
-          texte,
-        });
+        const match = ligne.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
+        if (match) {
+          // Ligne de type "Auteur : texte"
+          dialogues.push({
+            auteurMention: match[1].trim(),
+            texte: match[2].trim(),
+          });
+        } else {
+          // Pas de ":", donc ligne d'intro ou continuation
+          if (dialogues.length === 0) {
+            dialogues.push({ auteurMention: "📜", texte: ligne });
+          } else {
+            dialogues[dialogues.length - 1].texte += " " + ligne;
+          }
+        }
       }
 
-      // Si on a trouvé au moins une ligne de dialogue
       if (dialogues.length > 0) {
         citations.push({
           auteurDiscord: {
@@ -266,12 +274,28 @@ async function handleCommands(message) {
       .setPlaceholder("Choisissez une commande")
       .addOptions([
         { label: "!Bonjour", value: "bonjour", description: "Dire bonjour" },
-        { label: "!Aide", value: "aide", description: "Voir les commandes disponibles" },
-        { label: "!Citation", value: "citation", description: "Obtenir une citation" },
+        {
+          label: "!Aide",
+          value: "aide",
+          description: "Voir les commandes disponibles",
+        },
+        {
+          label: "!Citation",
+          value: "citation",
+          description: "Obtenir une citation",
+        },
         { label: "!Météo", value: "meteo", description: "Le fameux Meteo" },
         { label: "!Zen", value: "zen", description: "Voir les membres Zen" },
-        { label: "!Messi", value: "messi", description: "Un message légendaire" },
-        { label: "!Sounds", value: "sounds", description: "Jouer des sons disponibles" },
+        {
+          label: "!Messi",
+          value: "messi",
+          description: "Un message légendaire",
+        },
+        {
+          label: "!Sounds",
+          value: "sounds",
+          description: "Jouer des sons disponibles",
+        },
       ]);
 
     const commandRow = new ActionRowBuilder().addComponents(commandMenu);
@@ -293,7 +317,7 @@ async function handleCommands(message) {
 
     if (args.length > 0) {
       const auteurRecherche = args.join(" ").toLowerCase();
-      filtered = citations.filter(c =>
+      filtered = citations.filter((c) =>
         c.auteurDiscord.username.toLowerCase().includes(auteurRecherche)
       );
     }
@@ -308,7 +332,9 @@ async function handleCommands(message) {
       .setColor("#f5c518")
       .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
       .setDescription(
-        citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")
+        citation.dialogue
+          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
+          .join("\n")
       );
 
     message.reply({ embeds: [embed] });
@@ -318,7 +344,6 @@ async function handleCommands(message) {
   // Tu peux ajouter d'autres commandes texte ici si nécessaire
   // ------------------------------
 }
-
 
 /* ----------------------------------------------------------
    ⚙️ Gestion des interactions (modifiée pour citations)
@@ -356,7 +381,7 @@ async function handleInteraction(interaction) {
         }
 
         const options = Array.from(zenMembers.values())
-          .map(member => ({
+          .map((member) => ({
             label: member.user.username,
             value: member.id,
             description: `Utilisateur : ${member.user.tag}`,
@@ -410,7 +435,9 @@ async function handleInteraction(interaction) {
         }
 
         const options = citations.slice(0, 25).map((c, index) => {
-          const texte = c.dialogue.map(d => `${d.auteurMention}: ${d.texte}`).join(" | ");
+          const texte = c.dialogue
+            .map((d) => `${d.auteurMention}: ${d.texte}`)
+            .join(" | ");
           return {
             label: `Citation de ${c.auteurDiscord.username}`,
             description: texte.slice(0, 50) + "...",
@@ -447,7 +474,9 @@ async function handleInteraction(interaction) {
   // ------------------------------
   if (interaction.customId === "select_pseudo") {
     const selectedMemberId = interaction.values[0];
-    const selectedMember = await interaction.guild.members.fetch(selectedMemberId);
+    const selectedMember = await interaction.guild.members.fetch(
+      selectedMemberId
+    );
 
     await interaction.reply({
       content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
@@ -473,14 +502,15 @@ async function handleInteraction(interaction) {
       .setColor("#f5c518")
       .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
       .setDescription(
-        citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")
+        citation.dialogue
+          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
+          .join("\n")
       )
       .setFooter({ text: `Demandé par ${interaction.user.username}` });
 
     await interaction.reply({ embeds: [embed] });
   }
 }
-
 
 /* ----------------------------------------------------------
    🚀 Initialisation du bot
