@@ -258,6 +258,51 @@ async function getAllZenMembers(message) {
 }
 
 /* ----------------------------------------------------------
+   🧘‍♂️ Afficher le menu Zen (pour !zen ou !meteo)
+---------------------------------------------------------- */
+async function showZenMenuFromMessageOrInteraction(interactionOrMessage) {
+  const zenMembers = await getAllZenMembers(interactionOrMessage);
+
+  if (zenMembers.size === 0) {
+    return interactionOrMessage.reply
+      ? await interactionOrMessage.reply(
+          "Aucun membre avec le rôle Zen trouvé."
+        )
+      : interactionOrMessage.channel.send(
+          "Aucun membre avec le rôle Zen trouvé."
+        );
+  }
+
+  const options = Array.from(zenMembers.values())
+    .map((member) => ({
+      label: member.user.username,
+      value: member.id,
+      description: `Utilisateur : ${member.user.tag}`,
+      emoji: "🧘‍♂️",
+    }))
+    .slice(0, 25);
+
+  const zenMenu = new StringSelectMenuBuilder()
+    .setCustomId("select_pseudo")
+    .setPlaceholder("Choisissez un membre Zen")
+    .addOptions(options);
+
+  const zenRow = new ActionRowBuilder().addComponents(zenMenu);
+
+  if (interactionOrMessage.reply) {
+    await interactionOrMessage.reply({
+      content: "Veuillez sélectionner un membre Zen :",
+      components: [zenRow],
+    });
+  } else {
+    await interactionOrMessage.channel.send({
+      content: "Veuillez sélectionner un membre Zen :",
+      components: [zenRow],
+    });
+  }
+}
+
+/* ----------------------------------------------------------
    💬 Gestion des commandes utilisateur
 ---------------------------------------------------------- */
 async function handleCommands(message) {
@@ -372,36 +417,10 @@ async function handleInteraction(interaction) {
         await interaction.reply("Shreuuu est LE Messi, Notre Messi");
         break;
 
-      case "zen": {
-        const zenMembers = await getAllZenMembers(interaction);
-
-        if (zenMembers.size === 0) {
-          await interaction.reply("Aucun membre avec le rôle Zen trouvé.");
-          return;
-        }
-
-        const options = Array.from(zenMembers.values())
-          .map((member) => ({
-            label: member.user.username,
-            value: member.id,
-            description: `Utilisateur : ${member.user.tag}`,
-            emoji: "🧘‍♂️",
-          }))
-          .slice(0, 25);
-
-        const zenMenu = new StringSelectMenuBuilder()
-          .setCustomId("select_pseudo")
-          .setPlaceholder("Choisissez un membre Zen")
-          .addOptions(options);
-
-        const zenRow = new ActionRowBuilder().addComponents(zenMenu);
-
-        await interaction.reply({
-          content: "Veuillez sélectionner un membre Zen :",
-          components: [zenRow],
-        });
+      case "zen":
+      case "meteo":
+        await showZenMenuFromMessageOrInteraction(interaction);
         break;
-      }
 
       case "sounds": {
         await interaction.deferReply();
@@ -458,14 +477,6 @@ async function handleInteraction(interaction) {
         });
         break;
       }
-
-      case "meteo":
-        // Peut rester vide si tu gères avec le menu "select_pseudo"
-        break;
-
-      default:
-        await interaction.reply("Commande non reconnue.");
-        break;
     }
   }
 
