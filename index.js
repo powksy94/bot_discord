@@ -20,16 +20,14 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-dotenv.config(); // Charge le fichier .env
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const token = process.env.DISCORD_TOKEN;
 
 if (!token) {
-  console.error(
-    "❌ Le token Discord (DISCORD_TOKEN) est manquant. Vérifie ton .env ou les variables Railway."
-  );
+  console.error("❌ Le token Discord est manquant !");
   process.exit(1);
 }
 
@@ -44,29 +42,23 @@ const client = new Client({
 });
 
 let citations = [];
+let soundFiles = [];
 
 /* ----------------------------------------------------------
-   🔄 Fonction améliorée pour charger les citations
+   🔄 Charger les citations depuis le salon #citations
 ---------------------------------------------------------- */
 async function loadCitations() {
   try {
     citations = [];
-
     const guild = client.guilds.cache.first();
-    if (!guild) {
-      console.error("❌ Aucune guilde trouvée !");
-      return;
-    }
+    if (!guild) return console.error("❌ Aucune guilde trouvée.");
 
     const category = guild.channels.cache.find(
       (ch) =>
         ch.type === ChannelType.GuildCategory &&
         ch.name.toLowerCase() === "la tour"
     );
-    if (!category) {
-      console.error("❌ La catégorie 'La Tour' n'a pas été trouvée !");
-      return;
-    }
+    if (!category) return console.error("❌ Catégorie 'La Tour' non trouvée.");
 
     const channel = guild.channels.cache.find(
       (ch) =>
@@ -74,51 +66,31 @@ async function loadCitations() {
         ch.parentId === category.id &&
         ch.name.toLowerCase() === "citations"
     );
-    if (!channel) {
-      console.error("❌ Le canal 'citations' n'a pas été trouvé !");
-      return;
-    }
+    if (!channel) return console.error("❌ Salon 'citations' non trouvé.");
 
     const messages = await channel.messages.fetch({ limit: 100 });
 
     for (const msg of Array.from(messages.values()).reverse()) {
-      if (!msg.content) continue;
-      if (msg.attachments.size > 0) continue;
-      if (msg.content.match(/https?:\/\//)) continue;
+      if (!msg.content || msg.attachments.size > 0 || msg.content.match(/https?:\/\//)) continue;
 
-      // 🔹 Nettoyage du contenu (enlève mentions et emojis)
       let contenu = msg.content
-        .replace(/<a?:\w+:\d+>/g, "") // emojis personnalisés
+        .replace(/<a?:\w+:\d+>/g, "")
         .replace(/<@!?(\d+)>/g, (m, id) => {
           const user = msg.guild.members.cache.get(id);
           return user ? `@${user.user.username}` : "@inconnu";
         })
-        .replace(/<#[0-9]+>/g, "") // tags de salons
-        .replace(/<@&[0-9]+>/g, "") // mentions de rôles
+        .replace(/<#[0-9]+>/g, "")
+        .replace(/<@&[0-9]+>/g, "")
         .trim();
 
-      const lignes = contenu
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
+      const lignes = contenu.split("\n").map(l => l.trim()).filter(Boolean);
       const dialogues = [];
 
       for (const ligne of lignes) {
         const match = ligne.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
-        if (match) {
-          // Ligne de type "Auteur : texte"
-          dialogues.push({
-            auteurMention: match[1].trim(),
-            texte: match[2].trim(),
-          });
-        } else {
-          // Pas de ":", donc ligne d'intro ou continuation
-          if (dialogues.length === 0) {
-            dialogues.push({ auteurMention: "📜", texte: ligne });
-          } else {
-            dialogues[dialogues.length - 1].texte += " " + ligne;
-          }
-        }
+        if (match) dialogues.push({ auteurMention: match[1].trim(), texte: match[2].trim() });
+        else if (dialogues.length === 0) dialogues.push({ auteurMention: "📜", texte: ligne });
+        else dialogues[dialogues.length - 1].texte += " " + ligne;
       }
 
       if (dialogues.length > 0) {
@@ -135,396 +107,175 @@ async function loadCitations() {
       }
     }
 
-    console.log(
-      `✅ ${citations.length} citation(s) chargée(s) depuis #citations.`
-    );
-  } catch (error) {
-    console.error("❌ Erreur lors du chargement des citations :", error);
+    console.log(`✅ ${citations.length} citation(s) chargée(s).`);
+  } catch (err) {
+    console.error("❌ Erreur lors du chargement des citations :", err);
   }
 }
 
 /* ----------------------------------------------------------
-   🎵 Partie sons (inchangée)
+   🎵 Charger les sons
 ---------------------------------------------------------- */
-let soundFiles = [];
-
 async function handleSoundsCommand() {
   const soundsDir = path.join(__dirname, "sounds");
+  if (!fs.existsSync(soundsDir)) return "Le dossier des sons n'existe pas.";
 
-  if (!fs.existsSync(soundsDir)) {
-    return "Le dossier des sons n'existe pas.";
-  }
+  const files = fs.readdirSync(soundsDir).filter(f => f.endsWith(".ogg"));
+  if (files.length === 0) return "Aucun son .ogg disponible.";
 
-  const files = fs
-    .readdirSync(soundsDir)
-    .filter((file) => file.endsWith(".ogg"));
-  if (files.length === 0) {
-    return "Aucun son .ogg disponible.";
-  }
-
-  soundFiles = files.map((file) => ({
-    label: file.replace(".ogg", ""),
-    value: file.replace(".ogg", ""),
-  }));
-
+  soundFiles = files.map(f => ({ label: f.replace(".ogg", ""), value: f.replace(".ogg", "") }));
   return `${files.length} son(s) rechargé(s).`;
 }
 
-client.on("messageCreate", async (message) => {
-  if (message.content === "!reload_sounds") {
-    const result = await handleSoundsCommand();
-    message.reply(result);
-  }
-});
-
 /* ----------------------------------------------------------
-   🔊 Gestion des interactions pour jouer les sons
+   🧘‍♂️ Récupérer tous les membres Zen
 ---------------------------------------------------------- */
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.customId === "select-sound") {
-    const soundName = interaction.values[0];
-    const soundPath = path.join(__dirname, "sounds", `${soundName}.ogg`);
-
-    const member = interaction.guild.members.cache.get(interaction.user.id);
-    const voiceChannel = member?.voice.channel;
-
-    if (!voiceChannel) {
-      await interaction.reply({
-        content: "Tu dois être dans un salon vocal.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!fs.existsSync(soundPath)) {
-      await interaction.reply({ content: "Son introuvable.", ephemeral: true });
-      return;
-    }
-
-    try {
-      const connection = joinVoiceChannel({
-        channelId: interaction.member.voice.channel.id,
-        guildId: interaction.guild.id,
-        adapterCreator: interaction.guild.voiceAdapterCreator,
-      });
-      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-      const resource = createAudioResource(soundPath);
-      const player = createAudioPlayer();
-
-      connection.subscribe(player);
-      player.play(resource);
-
-      player.on(AudioPlayerStatus.Idle, () => {
-        connection.destroy();
-      });
-
-      await interaction.reply({
-        content: `▶️ Lecture de **${soundName}**`,
-        ephemeral: false,
-      });
-    } catch (error) {
-      console.error(error);
-      interaction.reply({
-        content: "Erreur lors de la lecture.",
-        ephemeral: true,
-      });
-    }
-  }
-});
-
-/* ----------------------------------------------------------
-   🧘‍♂️ Récupération des membres Zen (inchangée)
----------------------------------------------------------- */
-async function getAllZenMembers(message) {
+async function getAllZenMembers(guild) {
   try {
-    const roleZen = message.guild.roles.cache.find(
-      (role) => role.name === "Zen"
-    );
-
-    if (!roleZen) {
-      console.error("❌ Le rôle 'Zen' est introuvable.");
-      return [];
-    }
-
-    await message.guild.members.fetch();
-    const zenMembers = roleZen.members.filter((member) => !member.user.bot);
-    console.log(`✅ ${zenMembers.size} membre(s) ont le rôle 'Zen'.`);
-
-    return zenMembers;
-  } catch (error) {
-    console.error("❌ Erreur lors de la récupération des membres Zen :", error);
+    await guild.members.fetch();
+    const roleZen = guild.roles.cache.find(r => r.name === "Zen");
+    if (!roleZen) return [];
+    return roleZen.members.filter(m => !m.user.bot);
+  } catch (err) {
+    console.error("❌ Erreur lors de la récupération des membres Zen :", err);
     return [];
   }
 }
 
 /* ----------------------------------------------------------
-   🧘‍♂️ Afficher le menu Zen (pour !zen ou !meteo)
----------------------------------------------------------- */
-async function showZenMenuFromMessageOrInteraction(interactionOrMessage) {
-  const zenMembers = await getAllZenMembers(interactionOrMessage);
-
-  if (zenMembers.size === 0) {
-    return interactionOrMessage.reply
-      ? await interactionOrMessage.reply(
-          "Aucun membre avec le rôle Zen trouvé."
-        )
-      : interactionOrMessage.channel.send(
-          "Aucun membre avec le rôle Zen trouvé."
-        );
-  }
-
-  const options = Array.from(zenMembers.values())
-    .map((member) => ({
-      label: member.user.username,
-      value: member.id,
-      description: `Utilisateur : ${member.user.tag}`,
-      emoji: "🧘‍♂️",
-    }))
-    .slice(0, 25);
-
-  const zenMenu = new StringSelectMenuBuilder()
-    .setCustomId("select_pseudo")
-    .setPlaceholder("Choisissez un membre Zen")
-    .addOptions(options);
-
-  const zenRow = new ActionRowBuilder().addComponents(zenMenu);
-
-  if (interactionOrMessage.reply) {
-    await interactionOrMessage.reply({
-      content: "Veuillez sélectionner un membre Zen :",
-      components: [zenRow],
-    });
-  } else {
-    await interactionOrMessage.channel.send({
-      content: "Veuillez sélectionner un membre Zen :",
-      components: [zenRow],
-    });
-  }
-}
-
-/* ----------------------------------------------------------
-   💬 Gestion des commandes utilisateur
+   💬 Gestion des commandes texte
 ---------------------------------------------------------- */
 async function handleCommands(message) {
   if (message.author.bot) return;
 
   const content = message.content.toLowerCase();
 
-  // ------------------------------
-  // Commande menu principale "!"
-  // ------------------------------
   if (content === "!") {
-    const commandMenu = new StringSelectMenuBuilder()
+    const menu = new StringSelectMenuBuilder()
       .setCustomId("command_menu")
       .setPlaceholder("Choisissez une commande")
       .addOptions([
-        { label: "!Bonjour", value: "bonjour", description: "Dire bonjour" },
-        {
-          label: "!Aide",
-          value: "aide",
-          description: "Voir les commandes disponibles",
-        },
-        {
-          label: "!Citation",
-          value: "citation",
-          description: "Obtenir une citation",
-        },
-        { label: "!Météo", value: "meteo", description: "Le fameux Meteo" },
-        { label: "!Zen", value: "zen", description: "Voir les membres Zen" },
-        {
-          label: "!Messi",
-          value: "messi",
-          description: "Un message légendaire",
-        },
-        {
-          label: "!Sounds",
-          value: "sounds",
-          description: "Jouer des sons disponibles",
-        },
+        { label: "!Bonjour", value: "bonjour" },
+        { label: "!Aide", value: "aide" },
+        { label: "!Citation", value: "citation" },
+        { label: "!Météo", value: "meteo" },
+        { label: "!Zen", value: "zen" },
+        { label: "!Messi", value: "messi" },
+        { label: "!Sounds", value: "sounds" },
       ]);
-
-    const commandRow = new ActionRowBuilder().addComponents(commandMenu);
-
-    await message.channel.send({
-      content: "Voici les commandes disponibles :",
-      components: [commandRow],
-    });
-
-    return; // fin de la commande !
+    await message.channel.send({ content: "Voici les commandes disponibles :", components: [new ActionRowBuilder().addComponents(menu)] });
+    return;
   }
 
-  // ------------------------------
-  // Commande !citation [auteur]
-  // ------------------------------
   if (content.startsWith("!citation")) {
-    const args = message.content.split(" ").slice(1); // récupère l'auteur si spécifié
+    const args = message.content.split(" ").slice(1);
     let filtered = citations;
+    if (args.length > 0) filtered = citations.filter(c => c.auteurDiscord.username.toLowerCase().includes(args.join(" ").toLowerCase()));
 
-    if (args.length > 0) {
-      const auteurRecherche = args.join(" ").toLowerCase();
-      filtered = citations.filter((c) =>
-        c.auteurDiscord.username.toLowerCase().includes(auteurRecherche)
-      );
-    }
-
-    if (filtered.length === 0) {
-      message.reply("⚠️ Aucune citation trouvée pour cet auteur.");
-      return;
-    }
+    if (filtered.length === 0) return message.reply("⚠️ Aucune citation trouvée.");
 
     const citation = filtered[Math.floor(Math.random() * filtered.length)];
     const embed = new EmbedBuilder()
       .setColor("#f5c518")
       .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
-      .setDescription(
-        citation.dialogue
-          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
-          .join("\n")
-      );
-
+      .setDescription(citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n"));
     message.reply({ embeds: [embed] });
   }
-
-  // ------------------------------
-  // Tu peux ajouter d'autres commandes texte ici si nécessaire
-  // ------------------------------
 }
 
 /* ----------------------------------------------------------
-   ⚙️ Gestion des interactions (modifiée pour citations)
+   ⚙️ Gestion des interactions
 ---------------------------------------------------------- */
 async function handleInteraction(interaction) {
   if (!interaction.isStringSelectMenu()) return;
 
   const selected = interaction.values[0];
 
-  // ------------------------------
-  // Menu principal des commandes
-  // ------------------------------
+  // Menu principal
   if (interaction.customId === "command_menu") {
     switch (selected) {
-      case "bonjour":
-        await interaction.reply("Bonjour ! Je suis ton bot.");
-        break;
-
-      case "aide":
-        await interaction.reply(
-          "Voici les commandes disponibles : `!bonjour`, `!aide`, `!citation [auteur]`, `!Météo`, `!Zen`, `!Messi`, `!Sounds`"
-        );
-        break;
-
-      case "messi":
-        await interaction.reply("Shreuuu est LE Messi, Notre Messi");
-        break;
-
-      case "zen":
-      case "meteo":
-        await showZenMenuFromMessageOrInteraction(interaction);
-        break;
-
-      case "sounds": {
+      case "bonjour": return interaction.reply("Bonjour ! Je suis ton bot.");
+      case "aide": return interaction.reply("Commandes : !bonjour, !aide, !citation [auteur], !Météo, !Zen, !Messi, !Sounds");
+      case "messi": return interaction.reply("Shreuuu est LE Messi, Notre Messi");
+      case "sounds":
         await interaction.deferReply();
         await handleSoundsCommand();
-
-        if (soundFiles.length === 0) {
-          return interaction.editReply("Aucun son disponible.");
-        }
-
-        const options = soundFiles.slice(0, 25);
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId("select-sound")
-          .setPlaceholder("Choisis un son à jouer")
-          .addOptions(options);
-
-        const row = new ActionRowBuilder().addComponents(selectMenu);
-
-        await interaction.editReply({
-          content: "🎵 Sélectionne un son à jouer :",
-          components: [row],
-        });
-        break;
-      }
-
-      case "citation": {
-        if (citations.length === 0) {
-          await interaction.reply(
-            "⚠️ Aucune citation trouvée. Vérifie le salon #citations."
-          );
-          return;
-        }
-
-        const options = citations.slice(0, 25).map((c, index) => {
-          const texte = c.dialogue
-            .map((d) => `${d.auteurMention}: ${d.texte}`)
-            .join(" | ");
-          return {
-            label: `Citation de ${c.auteurDiscord.username}`,
-            description: texte.slice(0, 50) + "...",
-            value: index.toString(),
-          };
-        });
-
-        const citationMenu = new StringSelectMenuBuilder()
-          .setCustomId("menu_citations")
-          .setPlaceholder("Choisis une citation")
-          .addOptions(options);
-
-        const citationRow = new ActionRowBuilder().addComponents(citationMenu);
-
-        await interaction.reply({
-          content: "📖 Sélectionne une citation :",
-          components: [citationRow],
-        });
-        break;
-      }
+        if (soundFiles.length === 0) return interaction.editReply("Aucun son disponible.");
+        const menuSounds = new StringSelectMenuBuilder().setCustomId("select-sound").setPlaceholder("Choisis un son à jouer").addOptions(soundFiles.slice(0, 25));
+        return interaction.editReply({ content: "🎵 Sélectionne un son :", components: [new ActionRowBuilder().addComponents(menuSounds)] });
+      case "citation":
+        if (citations.length === 0) return interaction.reply("⚠️ Aucune citation trouvée.");
+        const options = citations.slice(0, 25).map((c, i) => ({ label: `Citation de ${c.auteurDiscord.username}`, description: c.dialogue.map(d => `${d.auteurMention}: ${d.texte}`).join(" | ").slice(0, 50) + "...", value: i.toString() }));
+        return interaction.reply({ content: "📖 Sélectionne une citation :", components: [new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId("menu_citations").setPlaceholder("Choisis une citation").addOptions(options))] });
+      case "zen": return showZenMenu(interaction, "Zen");
+      case "meteo": return showZenMenu(interaction, "Météo", "Le fameux Météo !");
     }
   }
 
-  // ------------------------------
-  // Menu sélection membre Zen
-  // ------------------------------
-  if (interaction.customId === "select_pseudo") {
-    const selectedMemberId = interaction.values[0];
-    const selectedMember = await interaction.guild.members.fetch(
-      selectedMemberId
-    );
+  // Menu sons
+  if (interaction.customId === "select-sound") {
+    const soundPath = path.join(__dirname, "sounds", `${selected}.ogg`);
+    const member = interaction.guild.members.cache.get(interaction.user.id);
+    const voiceChannel = member?.voice.channel;
+    if (!voiceChannel) return interaction.reply({ content: "Tu dois être dans un salon vocal.", ephemeral: true });
+    if (!fs.existsSync(soundPath)) return interaction.reply({ content: "Son introuvable.", ephemeral: true });
 
-    await interaction.reply({
-      content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
-    });
+    try {
+      const connection = joinVoiceChannel({ channelId: voiceChannel.id, guildId: interaction.guild.id, adapterCreator: interaction.guild.voiceAdapterCreator });
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+      const player = createAudioPlayer();
+      connection.subscribe(player);
+      player.play(createAudioResource(soundPath));
+      player.on(AudioPlayerStatus.Idle, () => connection.destroy());
+      interaction.reply({ content: `▶️ Lecture de **${selected}**`, ephemeral: false });
+    } catch (err) {
+      console.error(err);
+      interaction.reply({ content: "Erreur lors de la lecture.", ephemeral: true });
+    }
   }
 
-  // ------------------------------
-  // Menu sélection citation
-  // ------------------------------
+  // Menu Zen/Météo
+  if (interaction.customId.startsWith("select_pseudo_")) {
+    const type = interaction.customId.split("_")[2]; // zen ou meteo
+    const selectedMember = await interaction.guild.members.fetch(selected);
+    if (type === "zen") interaction.reply({ content: `Membre Zen sélectionné : ${selectedMember.user.tag}`, ephemeral: true });
+    else if (type === "meteo") interaction.reply({ content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`, ephemeral: true });
+  }
+
+  // Menu citations
   if (interaction.customId === "menu_citations") {
-    const selectedIndex = parseInt(interaction.values[0], 10);
-    const citation = citations[selectedIndex];
-
-    if (!citation) {
-      await interaction.reply({
-        content: "❌ Citation introuvable ou supprimée.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor("#f5c518")
-      .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
-      .setDescription(
-        citation.dialogue
-          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
-          .join("\n")
-      )
-      .setFooter({ text: `Demandé par ${interaction.user.username}` });
-
-    await interaction.reply({ embeds: [embed] });
+    const citation = citations[parseInt(selected, 10)];
+    if (!citation) return interaction.reply({ content: "❌ Citation introuvable.", ephemeral: true });
+    const embed = new EmbedBuilder().setColor("#f5c518").setTitle(`💬 Citation de ${citation.auteurDiscord.username}`).setDescription(citation.dialogue.map(d => `**${d.auteurMention}**: ${d.texte}`).join("\n")).setFooter({ text: `Demandé par ${interaction.user.username}` });
+    if (!interaction.replied && !interaction.deferred) await interaction.reply({ embeds: [embed], ephemeral: true });
+    else await interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 }
 
 /* ----------------------------------------------------------
-   🚀 Initialisation du bot
+   🔹 Fonction pour afficher le menu Zen/Météo
+---------------------------------------------------------- */
+async function showZenMenu(interaction, type, message = null) {
+  const zenMembers = await getAllZenMembers(interaction.guild);
+  if (zenMembers.size === 0) return interaction.reply({ content: "Aucun membre Zen trouvé.", ephemeral: true });
+
+  const options = Array.from(zenMembers.values()).map(m => ({
+    label: m.user.username,
+    value: m.id,
+    description: `Utilisateur : ${m.user.tag}`,
+    emoji: "🧘‍♂️",
+  })).slice(0, 25);
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`select_pseudo_${type.toLowerCase()}`)
+    .setPlaceholder(`Choisissez un membre pour ${type}`)
+    .addOptions(options);
+
+  await interaction.reply({ content: message || `Veuillez sélectionner un membre pour ${type} :`, components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+}
+
+/* ----------------------------------------------------------
+   🚀 Initialisation
 ---------------------------------------------------------- */
 client.once("ready", async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
