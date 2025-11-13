@@ -97,13 +97,10 @@ async function loadCitations() {
       let introduction = null;
 
       for (const ligne of lignes) {
-        // Si c’est une ligne descriptive (ex: "POV : ...")
         if (!ligne.startsWith("-") && !ligne.includes(":")) {
           introduction = ligne;
           continue;
         }
-
-        // Si c’est une ligne de dialogue (avec ou sans "-")
         const match = ligne.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
         if (match) {
           dialogues.push({
@@ -167,13 +164,70 @@ async function getAllZenMembers(guild) {
 }
 
 /* ----------------------------------------------------------
+   💬 Gestion des commandes texte (menu '!')
+---------------------------------------------------------- */
+async function handleCommands(message) {
+  if (message.author.bot) return;
+
+  if (message.content === "!") {
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("command_menu")
+      .setPlaceholder("Choisissez une commande")
+      .addOptions([
+        { label: "!Bonjour", value: "bonjour" },
+        { label: "!Aide", value: "aide" },
+        { label: "!Citation", value: "citation" },
+        { label: "!Météo", value: "meteo" },
+        { label: "!Zen", value: "zen" },
+        { label: "!Messi", value: "messi" },
+        { label: "!Sounds", value: "sounds" },
+      ]);
+
+    await message.channel.send({
+      content: "Voici les commandes disponibles :",
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
+  }
+}
+
+/* ----------------------------------------------------------
+   🔹 Fonction pour afficher le menu Zen/Météo
+---------------------------------------------------------- */
+async function showZenMenu(interaction, type, message = null) {
+  const zenMembers = await getAllZenMembers(interaction.guild);
+  if (!zenMembers || zenMembers.length === 0)
+    return interaction.reply({
+      content: "Aucun membre Zen trouvé.",
+      ephemeral: true,
+    });
+
+  const options = zenMembers.slice(0, 25).map((m) => ({
+    label: m.user.username,
+    value: m.id,
+    description: `Utilisateur : ${m.user.tag}`,
+    emoji: "🧘‍♂️",
+  }));
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`select_pseudo_${type.toLowerCase()}`)
+    .setPlaceholder(`Choisissez un membre pour ${type}`)
+    .addOptions(options);
+
+  await interaction.reply({
+    content: message || `Veuillez sélectionner un membre pour ${type} :`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+    ephemeral: true,
+  });
+}
+
+/* ----------------------------------------------------------
    ⚙️ Gestion des interactions
 ---------------------------------------------------------- */
 async function handleInteraction(interaction) {
   if (!interaction.isStringSelectMenu()) return;
   const selected = interaction.values[0];
 
-  /* -------- Menu principal -------- */
+  /* --- Menu principal --- */
   if (interaction.customId === "command_menu") {
     switch (selected) {
       case "bonjour":
@@ -226,21 +280,15 @@ async function handleInteraction(interaction) {
     }
   }
 
-  /* -------- Menu sons -------- */
+  /* --- Menu sons --- */
   if (interaction.customId === "select-sound") {
     const soundPath = path.join(__dirname, "sounds", `${selected}.ogg`);
     const member = interaction.guild.members.cache.get(interaction.user.id);
     const voiceChannel = member?.voice.channel;
     if (!voiceChannel)
-      return interaction.reply({
-        content: "Tu dois être dans un salon vocal.",
-        ephemeral: true,
-      });
+      return interaction.reply({ content: "Tu dois être dans un salon vocal.", ephemeral: true });
     if (!fs.existsSync(soundPath))
-      return interaction.reply({
-        content: "Son introuvable.",
-        ephemeral: true,
-      });
+      return interaction.reply({ content: "Son introuvable.", ephemeral: true });
 
     try {
       const connection = joinVoiceChannel({
@@ -253,93 +301,46 @@ async function handleInteraction(interaction) {
       connection.subscribe(player);
       player.play(createAudioResource(soundPath));
       player.on(AudioPlayerStatus.Idle, () => connection.destroy());
-      interaction.reply({
-        content: `▶️ Lecture de **${selected}**`,
-        ephemeral: false,
-      });
+      interaction.reply({ content: `▶️ Lecture de **${selected}**`, ephemeral: false });
     } catch (err) {
       console.error(err);
-      interaction.reply({
-        content: "Erreur lors de la lecture.",
-        ephemeral: true,
-      });
+      interaction.reply({ content: "Erreur lors de la lecture.", ephemeral: true });
     }
   }
 
-  /* -------- Menu citations -------- */
+  /* --- Menu citations --- */
   if (interaction.customId === "menu_citations") {
     const citation = citations[parseInt(selected, 10)];
     if (!citation)
-      return interaction.reply({
-        content: "❌ Citation introuvable.",
-        ephemeral: true,
-      });
+      return interaction.reply({ content: "❌ Citation introuvable.", ephemeral: true });
 
     const embed = new EmbedBuilder()
       .setColor("#f5c518")
       .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
       .setDescription(
         (citation.introduction ? `*${citation.introduction}*\n\n` : "") +
-          citation.dialogue
-            .map((d) => `**${d.auteurMention}** : ${d.texte}`)
-            .join("\n")
+          citation.dialogue.map((d) => `**${d.auteurMention}** : ${d.texte}`).join("\n")
       )
       .setFooter({ text: `Demandé par ${interaction.user.username}` });
 
     if (!interaction.replied && !interaction.deferred)
       await interaction.reply({ embeds: [embed], ephemeral: true });
-    else await interaction.followUp({ embeds: [embed], ephemeral: true });
+    else
+      await interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 
-  /* -------- Menu Zen / Météo -------- */
+  /* --- Menu Zen / Météo --- */
   if (interaction.customId.startsWith("select_pseudo_")) {
-    const type = interaction.customId.split("_")[2]; // zen ou meteo
+    const type = interaction.customId.split("_")[2];
     const selectedMember = await interaction.guild.members.fetch(selected);
-
     await interaction.deferReply({ ephemeral: true });
 
     if (type === "zen") {
-      await interaction.followUp({
-        content: `Membre Zen sélectionné : ${selectedMember.user.tag}`,
-        ephemeral: true,
-      });
+      await interaction.followUp({ content: `Membre Zen sélectionné : ${selectedMember.user.tag}`, ephemeral: true });
     } else if (type === "meteo") {
-      await interaction.followUp({
-        content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
-        ephemeral: true,
-      });
+      await interaction.followUp({ content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`, ephemeral: true });
     }
   }
-}
-
-/* ----------------------------------------------------------
-   🔹 Fonction pour afficher le menu Zen/Météo
----------------------------------------------------------- */
-async function showZenMenu(interaction, type, message = null) {
-  const zenMembers = await getAllZenMembers(interaction.guild);
-  if (!zenMembers || zenMembers.length === 0)
-    return interaction.reply({
-      content: "Aucun membre Zen trouvé.",
-      ephemeral: true,
-    });
-
-  const options = zenMembers.slice(0, 25).map((m) => ({
-    label: m.user.username,
-    value: m.id,
-    description: `Utilisateur : ${m.user.tag}`,
-    emoji: "🧘‍♂️",
-  }));
-
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`select_pseudo_${type.toLowerCase()}`)
-    .setPlaceholder(`Choisissez un membre pour ${type}`)
-    .addOptions(options);
-
-  await interaction.reply({
-    content: message || `Veuillez sélectionner un membre pour ${type} :`,
-    components: [new ActionRowBuilder().addComponents(menu)],
-    ephemeral: true,
-  });
 }
 
 /* ----------------------------------------------------------
@@ -351,5 +352,6 @@ client.once("ready", async () => {
   await handleSoundsCommand();
 });
 
+client.on("messageCreate", handleCommands);
 client.on(Events.InteractionCreate, handleInteraction);
 client.login(token);
