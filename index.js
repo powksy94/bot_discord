@@ -92,18 +92,25 @@ async function loadCitations() {
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
+
       const dialogues = [];
+      let introduction = null;
 
       for (const ligne of lignes) {
+        // Si c’est une ligne descriptive (ex: "POV : ...")
+        if (!ligne.startsWith("-") && !ligne.includes(":")) {
+          introduction = ligne;
+          continue;
+        }
+
+        // Si c’est une ligne de dialogue (avec ou sans "-")
         const match = ligne.match(/^-?\s*([^:]+)\s*:\s*(.+)$/);
-        if (match)
+        if (match) {
           dialogues.push({
             auteurMention: match[1].trim(),
             texte: match[2].trim(),
           });
-        else if (dialogues.length === 0)
-          dialogues.push({ auteurMention: "📜", texte: ligne });
-        else dialogues[dialogues.length - 1].texte += " " + ligne;
+        }
       }
 
       if (dialogues.length > 0) {
@@ -116,6 +123,7 @@ async function loadCitations() {
           dialogue: dialogues,
           messageId: msg.id,
           date: msg.createdAt,
+          introduction: introduction || null,
         });
       }
     }
@@ -144,7 +152,7 @@ async function handleSoundsCommand() {
 }
 
 /* ----------------------------------------------------------
-   🧘‍♂️ Récupérer tous les membres Zen
+   🧘‍♂️ Récupérer les membres Zen
 ---------------------------------------------------------- */
 async function getAllZenMembers(guild) {
   try {
@@ -159,75 +167,20 @@ async function getAllZenMembers(guild) {
 }
 
 /* ----------------------------------------------------------
-   💬 Gestion des commandes texte
----------------------------------------------------------- */
-async function handleCommands(message) {
-  if (message.author.bot) return;
-
-  const content = message.content.toLowerCase();
-
-  if (content === "!") {
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("command_menu")
-      .setPlaceholder("Choisissez une commande")
-      .addOptions([
-        { label: "!Bonjour", value: "bonjour" },
-        { label: "!Aide", value: "aide" },
-        { label: "!Citation", value: "citation" },
-        { label: "!Météo", value: "meteo" },
-        { label: "!Zen", value: "zen" },
-        { label: "!Messi", value: "messi" },
-        { label: "!Sounds", value: "sounds" },
-      ]);
-    await message.channel.send({
-      content: "Voici les commandes disponibles :",
-      components: [new ActionRowBuilder().addComponents(menu)],
-    });
-    return;
-  }
-
-  if (content.startsWith("!citation")) {
-    const args = message.content.split(" ").slice(1);
-    let filtered = citations;
-    if (args.length > 0)
-      filtered = citations.filter((c) =>
-        c.auteurDiscord.username
-          .toLowerCase()
-          .includes(args.join(" ").toLowerCase())
-      );
-
-    if (filtered.length === 0)
-      return message.reply("⚠️ Aucune citation trouvée.");
-
-    const citation = filtered[Math.floor(Math.random() * filtered.length)];
-    const embed = new EmbedBuilder()
-      .setColor("#f5c518")
-      .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
-      .setDescription(
-        citation.dialogue
-          .map((d) => `**${d.auteurMention}**: ${d.texte}`)
-          .join("\n")
-      );
-    message.reply({ embeds: [embed] });
-  }
-}
-
-/* ----------------------------------------------------------
    ⚙️ Gestion des interactions
 ---------------------------------------------------------- */
 async function handleInteraction(interaction) {
   if (!interaction.isStringSelectMenu()) return;
-
   const selected = interaction.values[0];
 
-  // Menu principal
+  /* -------- Menu principal -------- */
   if (interaction.customId === "command_menu") {
     switch (selected) {
       case "bonjour":
         return interaction.reply("Bonjour ! Je suis ton bot.");
       case "aide":
         return interaction.reply(
-          "Commandes : !bonjour, !aide, !citation [auteur], !Météo, !Zen, !Messi, !Sounds"
+          "Commandes : !bonjour, !aide, !citation, !météo, !zen, !sounds"
         );
       case "messi":
         return interaction.reply("Shreuuu est LE Messi, Notre Messi");
@@ -249,11 +202,10 @@ async function handleInteraction(interaction) {
           return interaction.reply("⚠️ Aucune citation trouvée.");
         const options = citations.slice(0, 25).map((c, i) => ({
           label: `Citation de ${c.auteurDiscord.username}`,
-          description:
-            c.dialogue
-              .map((d) => `${d.auteurMention}: ${d.texte}`)
-              .join(" | ")
-              .slice(0, 50) + "...",
+          description: (
+            (c.introduction ? `${c.introduction} | ` : "") +
+            c.dialogue.map((d) => `${d.auteurMention}: ${d.texte}`).join(" | ")
+          ).slice(0, 80) + "...",
           value: i.toString(),
         }));
         return interaction.reply({
@@ -274,7 +226,7 @@ async function handleInteraction(interaction) {
     }
   }
 
-  // Menu sons
+  /* -------- Menu sons -------- */
   if (interaction.customId === "select-sound") {
     const soundPath = path.join(__dirname, "sounds", `${selected}.ogg`);
     const member = interaction.guild.members.cache.get(interaction.user.id);
@@ -314,80 +266,80 @@ async function handleInteraction(interaction) {
     }
   }
 
-  async function showZenMenu(interaction, type, message = null) {
-    const zenMembers = await getAllZenMembers(interaction.guild);
-    if (!zenMembers || zenMembers.length === 0)
+  /* -------- Menu citations -------- */
+  if (interaction.customId === "menu_citations") {
+    const citation = citations[parseInt(selected, 10)];
+    if (!citation)
       return interaction.reply({
-        content: "Aucun membre Zen trouvé.",
+        content: "❌ Citation introuvable.",
         ephemeral: true,
       });
 
-    const options = zenMembers.slice(0, 25).map((m) => ({
-      label: m.user.username,
-      value: m.id,
-      description: `Utilisateur : ${m.user.tag}`,
-      emoji: "🧘‍♂️",
-    }));
+    const embed = new EmbedBuilder()
+      .setColor("#f5c518")
+      .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
+      .setDescription(
+        (citation.introduction ? `*${citation.introduction}*\n\n` : "") +
+          citation.dialogue
+            .map((d) => `**${d.auteurMention}** : ${d.texte}`)
+            .join("\n")
+      )
+      .setFooter({ text: `Demandé par ${interaction.user.username}` });
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`select_pseudo_${type.toLowerCase()}`)
-      .setPlaceholder(`Choisissez un membre pour ${type}`)
-      .addOptions(options);
+    if (!interaction.replied && !interaction.deferred)
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    else await interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
 
-    await interaction.reply({
-      content: message || `Veuillez sélectionner un membre pour ${type} :`,
-      components: [new ActionRowBuilder().addComponents(menu)],
+  /* -------- Menu Zen / Météo -------- */
+  if (interaction.customId.startsWith("select_pseudo_")) {
+    const type = interaction.customId.split("_")[2]; // zen ou meteo
+    const selectedMember = await interaction.guild.members.fetch(selected);
+
+    await interaction.deferReply({ ephemeral: true });
+
+    if (type === "zen") {
+      await interaction.followUp({
+        content: `Membre Zen sélectionné : ${selectedMember.user.tag}`,
+        ephemeral: true,
+      });
+    } else if (type === "meteo") {
+      await interaction.followUp({
+        content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
+        ephemeral: true,
+      });
+    }
+  }
+}
+
+/* ----------------------------------------------------------
+   🔹 Fonction pour afficher le menu Zen/Météo
+---------------------------------------------------------- */
+async function showZenMenu(interaction, type, message = null) {
+  const zenMembers = await getAllZenMembers(interaction.guild);
+  if (!zenMembers || zenMembers.length === 0)
+    return interaction.reply({
+      content: "Aucun membre Zen trouvé.",
       ephemeral: true,
     });
 
-    // Gestion de la sélection
-    if (interaction.customId.startsWith("select_pseudo_")) {
-      const type = interaction.customId.split("_")[2]; // zen ou meteo
-      const selectedMember = await interaction.guild.members.fetch(
-        interaction.values[0]
-      );
+  const options = zenMembers.slice(0, 25).map((m) => ({
+    label: m.user.username,
+    value: m.id,
+    description: `Utilisateur : ${m.user.tag}`,
+    emoji: "🧘‍♂️",
+  }));
 
-      await interaction.deferReply({ ephemeral: true });
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`select_pseudo_${type.toLowerCase()}`)
+    .setPlaceholder(`Choisissez un membre pour ${type}`)
+    .addOptions(options);
 
-      if (type === "zen") {
-        await interaction.followUp({
-          content: `Membre Zen sélectionné : ${selectedMember.user.tag}`,
-          ephemeral: true,
-        });
-      } else if (type === "meteo") {
-        await interaction.followUp({
-          content: `Météo : ${selectedMember.user.tag} ?\n${selectedMember.user.tag} : Oui Météo ?\nMétéo : Non rien 😉`,
-          ephemeral: true,
-        });
-      }
-    }
-
-    // Menu citations
-    if (interaction.customId === "menu_citations") {
-      const citation = citations[parseInt(selected, 10)];
-      if (!citation)
-        return interaction.reply({
-          content: "❌ Citation introuvable.",
-          ephemeral: true,
-        });
-      const embed = new EmbedBuilder()
-        .setColor("#f5c518")
-        .setTitle(`💬 Citation de ${citation.auteurDiscord.username}`)
-        .setDescription(
-          citation.dialogue
-            .map((d) => `**${d.auteurMention}**: ${d.texte}`)
-            .join("\n")
-        )
-        .setFooter({ text: `Demandé par ${interaction.user.username}` });
-      if (!interaction.replied && !interaction.deferred)
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-      else await interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
-  }
-
-  /* ----------------------------------------------------------
-   🔹 Fonction pour afficher le menu Zen/Météo
----------------------------------------------------------- */
+  await interaction.reply({
+    content: message || `Veuillez sélectionner un membre pour ${type} :`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+    ephemeral: true,
+  });
 }
 
 /* ----------------------------------------------------------
@@ -399,6 +351,5 @@ client.once("ready", async () => {
   await handleSoundsCommand();
 });
 
-client.on("messageCreate", handleCommands);
 client.on(Events.InteractionCreate, handleInteraction);
 client.login(token);
